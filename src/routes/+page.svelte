@@ -9,6 +9,7 @@
 	import * as Alert from '$lib/components/ui/alert/index.js';
 	import Loader from '@lucide/svelte/icons/loader-circle';
 	import * as m from '$lib/paraglide/messages.js';
+	import LogoMark from '$lib/components/brand/logo-mark.svelte';
 	import LanguageSelector from '$lib/components/ui/selector/language-selector.svelte';
 	import ThemeSelector from '$lib/components/ui/selector/theme-selector.svelte';
 	import AdvancedSettings from '$lib/components/compression/advanced-settings.svelte';
@@ -317,18 +318,24 @@
 	<meta property="og:title" content="{m.app_title()} - {m.app_subtitle()}" />
 	<meta property="og:description" content={m.app_subtitle()} />
 	<meta property="og:url" content="https://compress.lol" />
+	<meta property="og:image" content="https://compress.lol/og.png" />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta property="og:image:alt" content="compress.lol logo and name" />
 
 	<!-- Twitter -->
-	<meta property="twitter:card" content="summary_large_image" />
-	<meta property="twitter:title" content="{m.app_title()} - {m.app_subtitle()}" />
-	<meta property="twitter:description" content={m.app_subtitle()} />
-
-	<link rel="icon" href="/favicon.ico" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="{m.app_title()} - {m.app_subtitle()}" />
+	<meta name="twitter:description" content={m.app_subtitle()} />
+	<meta name="twitter:image" content="https://compress.lol/og.png" />
 </svelte:head>
 
 <div class="container mx-auto max-w-4xl p-6">
-	<div class="mb-2 flex items-center justify-center gap-2">
-		<h1 class="mr-4 mb-2 text-4xl font-bold">{m.app_title()}</h1>
+	<div class="mb-2 flex flex-wrap items-center justify-center gap-2">
+		<h1 class="mb-2 flex items-center gap-2 text-3xl font-bold sm:mr-4 sm:text-4xl">
+			<LogoMark class="size-8 shrink-0 sm:size-10" />
+			{m.app_title()}
+		</h1>
 		<LanguageSelector />
 		<ThemeSelector />
 	</div>

@@ -4,8 +4,14 @@
 	"main": ".svelte-kit/cloudflare/_worker.js",
 	"compatibility_date": "2026-09-01",
 	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": true,
+	"preview_urls": true,
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
-	}
+	},
+	"routes": [
+		{ "pattern": "compress.lol", "custom_domain": true },
+		{ "pattern": "www.compress.lol", "custom_domain": true }
+	]
 }

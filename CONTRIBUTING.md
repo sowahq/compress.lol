@@ -51,6 +51,19 @@ Texts live in `messages/<locale>.json`, with English (`en.json`) as the referenc
 
 `npm test` fails if a language misses a key, leaves a text in English, has an empty or non-text value, or changes a placeholder or a link (its URL or markup). The product name compress.lol stays as it is; other names such as Discord may follow your language's grammar.
 
+## Platform presets
+
+Target presets live in `src/lib/compression/presets.json`. Each platform entry needs:
+
+- `id`: kebab-case, unique (`slack`, `signal`...);
+- `name`: as the platform writes it;
+- `sizeMb`: the limit in decimal megabytes, rounded down, or lower when the platform counts overhead (email attachments grow by about 33% when encoded);
+- `note`: which plan or case the limit applies to;
+- `source`: an official page of the platform (help center, documentation);
+- `checked`: the date you read that page, as `YYYY-MM-DD`.
+
+`npm test` validates the file. If you cannot open a pull request, use the "Platform preset" issue form.
+
 ## Commits and pull requests
 
 - One topic per pull request.

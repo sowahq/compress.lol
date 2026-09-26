@@ -1,0 +1,35 @@
+name: Platform preset
+description: Propose a target size for a platform (or report an outdated one)
+labels: [preset]
+body:
+  - type: markdown
+    attributes:
+      value: Presets live in `src/lib/compression/presets.json`. A pull request that edits it directly is welcome too.
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: Slack, Signal, Messenger...
+    validations:
+      required: true
+  - type: input
+    id: limit
+    attributes:
+      label: Upload limit
+      description: The limit as written by the platform, with its unit.
+      placeholder: 100 MB per file
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Official source
+      description: A page from the platform itself (help center, documentation), not a third-party blog.
+      placeholder: https://...
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Plan or account type the limit applies to, and anything that changes it (encoding overhead, recompression...).

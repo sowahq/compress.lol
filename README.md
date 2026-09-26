@@ -58,7 +58,7 @@ All sizes are decimal megabytes (1 MB = 1,000,000 bytes), the unit platforms use
 - **WhatsApp** – 16 MB (largest video sent as media)
 - **Gmail / Outlook** – 18 MB (25 MB limit minus attachment encoding overhead)
 
-Generic sizes: **8 MB**, **25 MB** (default), **50 MB**, **100 MB**, or a **custom size** from 1 to 2048 MB. Presets live in `src/lib/compression/presets.ts`.
+Generic sizes: **8 MB**, **25 MB** (default), **50 MB**, **100 MB**, or a **custom size** from 1 to 2048 MB. Presets live in `src/lib/compression/presets.json`, each with its official source and the date it was checked.
 
 ---
 

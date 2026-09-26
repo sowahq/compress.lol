@@ -24,6 +24,7 @@
 		buildAudioOnlyArgs,
 		buildCompressionArgs,
 		effectiveDuration,
+		type CompressionArgsOptions,
 		type TrimOptions
 	} from '$lib/compression/args';
 	import { encodeToTarget, MAX_ENCODE_ATTEMPTS } from '$lib/compression/target';
@@ -36,7 +37,7 @@
 		withMountedFile
 	} from '$lib/compression/ffmpeg';
 	import { isWebCodecsAvailable } from '$lib/compression/webcodecs-support';
-	import { createFallbackEncoder, type Engine } from '$lib/compression/engine';
+	import { createFallbackEncoder, NO_FALLBACK, type Engine } from '$lib/compression/engine';
 	import {
 		durationBucket,
 		failureReason,
@@ -200,12 +201,39 @@
 	};
 
 	let analysisId = 0;
+	let ffmpegProbeQueue: Promise<unknown> = Promise.resolve();
+	let webcodecsFallback: { file: File; reason: string } | null = null;
 
-	const loadWebCodecsEngine = () => import('$lib/compression/webcodecs');
+	type WebCodecsEngine = typeof import('$lib/compression/webcodecs');
 
-	const probeWithFFmpegFallback = async (file: File): Promise<VideoMetadata | null> => {
-		const probe = await probeWithFFmpeg(await ensureFFmpeg(), file);
-		return probe ? buildVideoMetadata(probe) : null;
+	const loadWebCodecsEngine = (): Promise<WebCodecsEngine> => import('$lib/compression/webcodecs');
+
+	const probeWithFFmpegFallback = (file: File): Promise<VideoMetadata | null> => {
+		const probe = ffmpegProbeQueue.then(async () => {
+			const result = await probeWithFFmpeg(await ensureFFmpeg(), file);
+			return result ? buildVideoMetadata(result) : null;
+		});
+		ffmpegProbeQueue = probe.catch(() => undefined);
+		return probe;
+	};
+
+	const initialEngineChoice = (file: File): { preferWebCodecs: boolean; reason: string } => {
+		if (!isWebCodecsAvailable()) {
+			return { preferWebCodecs: false, reason: 'webcodecs_unavailable' };
+		}
+		if (!readableByWebCodecs) {
+			return { preferWebCodecs: false, reason: 'unreadable_container' };
+		}
+		if (webcodecsFallback?.file === file) {
+			return { preferWebCodecs: false, reason: webcodecsFallback.reason };
+		}
+		return { preferWebCodecs: true, reason: NO_FALLBACK };
+	};
+
+	const resetProgress = (): void => {
+		progress = 0;
+		startTime = Date.now();
+		estimatedTimeRemaining = 0;
 	};
 
 	const analyzeFile = async (file: File): Promise<void> => {
@@ -234,7 +262,7 @@
 		} catch (error) {
 			console.error('Failed to analyze video:', error);
 			if (id === analysisId) {
-				errorMessage = 'Failed to load FFmpeg. Please refresh the page.';
+				errorMessage = 'Could not read this video. Please try again or refresh the page.';
 			}
 		} finally {
 			if (id === analysisId) {
@@ -247,12 +275,10 @@
 		if (!selectedFile || !videoMetadata || isAnalyzing || isTargetUnreachable) return;
 
 		isProcessing = true;
-		progress = 0;
 		encodeAttempt = 0;
 		errorMessage = '';
-		startTime = Date.now();
+		resetProgress();
 		const jobStartTime = startTime;
-		estimatedTimeRemaining = 0;
 
 		const file = selectedFile;
 		const metadata = videoMetadata;
@@ -287,44 +313,48 @@
 			});
 		};
 
+		const encodeOptions = (
+			sizeBudget: number
+		): Pick<
+			CompressionArgsOptions,
+			'targetSize' | 'preserveOriginalFps' | 'muteSound' | 'trim'
+		> => ({
+			targetSize: sizeBudget,
+			preserveOriginalFps: preserveFps,
+			muteSound: mute,
+			trim
+		});
+		const engineChoice = initialEngineChoice(file);
+
 		const encoder = audioOnly
 			? null
 			: createFallbackEncoder({
-					preferWebCodecs: readableByWebCodecs && isWebCodecsAvailable(),
-					initialFallbackReason: isWebCodecsAvailable()
-						? 'unreadable_container'
-						: 'webcodecs_unavailable',
-					webcodecs: async (sizeBudget) =>
-						(await loadWebCodecsEngine()).encodeWithWebCodecs(
+					preferWebCodecs: engineChoice.preferWebCodecs,
+					initialFallbackReason: engineChoice.reason,
+					webcodecs: async (sizeBudget) => {
+						message = 'Starting compression...';
+						const { encodeWithWebCodecs } = await loadWebCodecsEngine();
+						return encodeWithWebCodecs(
 							file,
 							metadata,
-							{
-								targetSize: sizeBudget,
-								preserveOriginalFps: preserveFps,
-								muteSound: mute,
-								trim,
-								bitrateMode: 'variable'
-							},
+							{ ...encodeOptions(sizeBudget), bitrateMode: 'variable' },
 							updateProgress
-						),
+						);
+					},
 					ffmpeg: (sizeBudget) =>
 						encodeWithFFmpeg((inputPath) =>
 							buildCompressionArgs(inputPath, metadata, {
-								targetSize: sizeBudget,
-								preserveOriginalFps: preserveFps,
-								muteSound: mute,
-								threadCount: isChromium ? optimalThreadCount() : 1,
-								trim
+								...encodeOptions(sizeBudget),
+								threadCount: isChromium ? optimalThreadCount() : 1
 							})
 						),
-					onFallback: () => {
+					onFallback: (reason) => {
+						webcodecsFallback = { file, reason };
 						activeEngine = 'ffmpeg';
-						progress = 0;
-						startTime = Date.now();
-						estimatedTimeRemaining = 0;
+						resetProgress();
 					}
 				});
-		const engineReport = () => ({
+		const engineReport = (): { engine: Engine; fallback_reason: string } => ({
 			engine: encoder?.engine ?? 'ffmpeg',
 			fallback_reason: encoder?.fallbackReason ?? 'audio_only'
 		});
@@ -343,9 +373,7 @@
 						minimumBudget,
 						encode: (sizeBudget, attempt) => {
 							encodeAttempt = attempt;
-							progress = 0;
-							startTime = Date.now();
-							estimatedTimeRemaining = 0;
+							resetProgress();
 							return encoder.encode(sizeBudget);
 						}
 					});

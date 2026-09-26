@@ -2,12 +2,23 @@ import type { FFmpeg, FFFSType, LogEvent } from '@ffmpeg/ffmpeg';
 import { OUTPUT_FILE } from './args';
 import type { VideoProbe } from './settings';
 
-export const FFMPEG_CORE_BASE_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/esm';
+const FFMPEG_CORE_PACKAGE = '@ffmpeg/core-mt@0.12.10/dist/esm';
+
+export const FFMPEG_CORE_MIRRORS = [
+	`https://cdn.jsdelivr.net/npm/${FFMPEG_CORE_PACKAGE}`,
+	`https://unpkg.com/${FFMPEG_CORE_PACKAGE}`
+];
 
 export interface VerifiedAsset {
 	file: string;
 	mimeType: string;
 	sha256: string;
+}
+
+export interface CoreAssets {
+	core: VerifiedAsset;
+	wasm: VerifiedAsset;
+	worker: VerifiedAsset;
 }
 
 export const FFMPEG_CORE_ASSETS = {
@@ -26,7 +37,7 @@ export const FFMPEG_CORE_ASSETS = {
 		mimeType: 'text/javascript',
 		sha256: 'f77898d631dc010b45c29c23cb4379c611a7d7b131bf591d08a656bb729a4ca3'
 	}
-} as const satisfies Record<string, VerifiedAsset>;
+} as const satisfies CoreAssets;
 
 const toHex = (buffer: ArrayBuffer): string =>
 	Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -41,12 +52,29 @@ export const fetchVerifiedBlobURL = async (
 	if (!response.ok) {
 		throw new Error(`Failed to fetch ${url}: HTTP ${response.status}`);
 	}
-	const bytes = await response.arrayBuffer();
-	const digest = toHex(await crypto.subtle.digest('SHA-256', bytes));
+	const blob = new Blob([await response.blob()], { type: mimeType });
+	const digest = toHex(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()));
 	if (digest !== sha256) {
 		throw new Error(`Integrity check failed for ${url}`);
 	}
-	return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+	return URL.createObjectURL(blob);
+};
+
+export const fetchFromMirrors = async (
+	mirrors: string[],
+	asset: VerifiedAsset,
+	fetcher: typeof fetch = fetch
+): Promise<string> => {
+	const failures: unknown[] = [];
+	for (const mirror of mirrors) {
+		try {
+			return await fetchVerifiedBlobURL(mirror, asset, fetcher);
+		} catch (error) {
+			console.warn(`Failed to load ${asset.file} from ${mirror}:`, error);
+			failures.push(error);
+		}
+	}
+	throw new AggregateError(failures, `Could not load ${asset.file} from any mirror`);
 };
 
 const MAX_FFMPEG_THREADS = 4;
@@ -59,13 +87,27 @@ export const optimalThreadCount = (): number => {
 	return Math.min(Math.max(1, cores - 1), MAX_FFMPEG_THREADS);
 };
 
-export const loadFFmpegCore = async (instance: Pick<FFmpeg, 'load'>): Promise<void> => {
-	const [coreURL, wasmURL, workerURL] = await Promise.all(
-		[FFMPEG_CORE_ASSETS.core, FFMPEG_CORE_ASSETS.wasm, FFMPEG_CORE_ASSETS.worker].map((asset) =>
-			fetchVerifiedBlobURL(FFMPEG_CORE_BASE_URL, asset)
+export const loadFFmpegCore = async (
+	instance: Pick<FFmpeg, 'load'>,
+	fetcher: typeof fetch = fetch,
+	assets: CoreAssets = FFMPEG_CORE_ASSETS
+): Promise<void> => {
+	const results = await Promise.allSettled(
+		[assets.core, assets.wasm, assets.worker].map((asset) =>
+			fetchFromMirrors(FFMPEG_CORE_MIRRORS, asset, fetcher)
 		)
 	);
-	await instance.load({ coreURL, wasmURL, workerURL });
+	const urls = results.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
+	try {
+		const failure = results.find((result) => result.status === 'rejected');
+		if (failure) {
+			throw failure.reason;
+		}
+		const [coreURL, wasmURL, workerURL] = urls;
+		await instance.load({ coreURL, wasmURL, workerURL });
+	} finally {
+		urls.forEach((url) => URL.revokeObjectURL(url));
+	}
 };
 
 export type MountableFFmpeg = Pick<FFmpeg, 'createDir' | 'mount' | 'unmount' | 'deleteDir'>;

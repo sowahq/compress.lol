@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OUTPUT_FILE } from './args';
 import {
+	FFMPEG_CORE_MIRRORS,
+	fetchFromMirrors,
 	fetchVerifiedBlobURL,
+	loadFFmpegCore,
+	type CoreAssets,
 	parseFpsFromLog,
 	parseProbeLog,
 	runFFmpeg,
@@ -294,5 +298,112 @@ describe('fetchVerifiedBlobURL', () => {
 		await expect(fetchVerifiedBlobURL('https://cdn.example/core', asset, fetcher)).rejects.toThrow(
 			'HTTP 404'
 		);
+	});
+});
+
+describe('fetchFromMirrors', () => {
+	const bytes = new TextEncoder().encode('core');
+	const digestOf = async (data: Uint8Array<ArrayBuffer>): Promise<string> =>
+		Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)), (byte) =>
+			byte.toString(16).padStart(2, '0')
+		).join('');
+
+	it('falls back to the next mirror and verifies it too', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const asset = { file: 'core.js', mimeType: 'text/javascript', sha256: await digestOf(bytes) };
+		const fetcher = vi.fn<typeof fetch>(async (input) =>
+			String(input).startsWith('https://first')
+				? new Response('blocked', { status: 403 })
+				: new Response(bytes)
+		);
+
+		const url = await fetchFromMirrors(['https://first', 'https://second'], asset, fetcher);
+
+		expect(fetcher.mock.calls.map(([input]) => input)).toEqual([
+			'https://first/core.js',
+			'https://second/core.js'
+		]);
+		expect(await (await fetch(url)).text()).toBe('core');
+		URL.revokeObjectURL(url);
+		warn.mockRestore();
+	});
+
+	it('fails when every mirror fails', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const asset = { file: 'core.js', mimeType: 'text/javascript', sha256: 'deadbeef' };
+		const fetcher = vi.fn<typeof fetch>(async () => new Response(bytes));
+
+		await expect(fetchFromMirrors(['https://a', 'https://b'], asset, fetcher)).rejects.toThrow(
+			'Could not load core.js from any mirror'
+		);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		warn.mockRestore();
+	});
+});
+
+describe('loadFFmpegCore', () => {
+	const digestOf = async (text: string): Promise<string> =>
+		Array.from(
+			new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))),
+			(byte) => byte.toString(16).padStart(2, '0')
+		).join('');
+
+	const assetsFor = async (): Promise<CoreAssets> => ({
+		core: { file: 'core.js', mimeType: 'text/javascript', sha256: await digestOf('core.js') },
+		wasm: { file: 'core.wasm', mimeType: 'application/wasm', sha256: await digestOf('core.wasm') },
+		worker: {
+			file: 'worker.js',
+			mimeType: 'text/javascript',
+			sha256: await digestOf('worker.js')
+		}
+	});
+
+	const echoFetcher = vi.fn<typeof fetch>(
+		async (input) => new Response(String(input).split('/').pop())
+	);
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('pins jsDelivr first and unpkg as fallback', () => {
+		expect(FFMPEG_CORE_MIRRORS).toEqual([
+			'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/esm',
+			'https://unpkg.com/@ffmpeg/core-mt@0.12.10/dist/esm'
+		]);
+	});
+
+	it('loads the verified files and revokes their blob URLs afterwards', async () => {
+		const createObjectURL = vi.spyOn(URL, 'createObjectURL');
+		const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL');
+		const load = vi.fn(async () => true);
+
+		await loadFFmpegCore({ load }, echoFetcher, await assetsFor());
+
+		const created = createObjectURL.mock.results.map((result) => result.value);
+		expect(created).toHaveLength(3);
+		expect(load).toHaveBeenCalledWith({
+			coreURL: created[0],
+			wasmURL: created[1],
+			workerURL: created[2]
+		});
+		expect(revokeObjectURL.mock.calls.map(([url]) => url).sort()).toEqual([...created].sort());
+	});
+
+	it('does not load and still revokes when one file fails verification', async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL');
+		const assets = await assetsFor();
+		const load = vi.fn(async () => true);
+
+		await expect(
+			loadFFmpegCore({ load }, echoFetcher, {
+				...assets,
+				wasm: { ...assets.wasm, sha256: 'tampered' }
+			})
+		).rejects.toThrow('Could not load core.wasm from any mirror');
+
+		expect(load).not.toHaveBeenCalled();
+		expect(revokeObjectURL).toHaveBeenCalledTimes(2);
 	});
 });

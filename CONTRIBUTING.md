@@ -55,12 +55,12 @@ Texts live in `messages/<locale>.json`, with English (`en.json`) as the referenc
 
 Target presets live in `src/lib/compression/presets.json`. Each platform entry needs:
 
-- `id`: kebab-case, unique (`slack`, `signal`...);
+- `id`: kebab-case, unique (`slack`, `signal`...). Never rename an existing id: it is saved in users' browsers and used in analytics and file names;
 - `name`: as the platform writes it;
 - `sizeMb`: the limit in decimal megabytes, rounded down, or lower when the platform counts overhead (email attachments grow by about 33% when encoded);
 - `note`: which plan or case the limit applies to;
-- `source`: an official page of the platform (help center, documentation);
-- `checked`: the date you read that page, as `YYYY-MM-DD`.
+- `sources`: official pages of the platform (help center, documentation), one or more;
+- `checked`: the date you read those pages, as `YYYY-MM-DD`.
 
 `npm test` validates the file. If you cannot open a pull request, use the "Platform preset" issue form.
 

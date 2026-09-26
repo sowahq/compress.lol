@@ -1,0 +1,45 @@
+{
+	"platforms": [
+		{
+			"id": "discord",
+			"name": "Discord",
+			"sizeMb": 20,
+			"note": "Free accounts",
+			"source": "https://support.discord.com/hc/en-us/articles/25444343291031-File-Attachments-FAQ",
+			"checked": "2026-09-26"
+		},
+		{
+			"id": "discord-nitro-basic",
+			"name": "Discord Nitro Basic",
+			"sizeMb": 50,
+			"note": "Nitro Basic subscription",
+			"source": "https://support.discord.com/hc/en-us/articles/25444343291031-File-Attachments-FAQ",
+			"checked": "2026-09-26"
+		},
+		{
+			"id": "discord-nitro",
+			"name": "Discord Nitro",
+			"sizeMb": 500,
+			"note": "Nitro subscription",
+			"source": "https://support.discord.com/hc/en-us/articles/25444343291031-File-Attachments-FAQ",
+			"checked": "2026-09-26"
+		},
+		{
+			"id": "whatsapp",
+			"name": "WhatsApp",
+			"sizeMb": 16,
+			"note": "Video sent as media, not as a document",
+			"source": "https://faq.whatsapp.com/239536730601513/",
+			"checked": "2026-09-26"
+		},
+		{
+			"id": "email",
+			"name": "Gmail / Outlook",
+			"sizeMb": 18,
+			"note": "25 MB message limit minus about 33% attachment encoding overhead",
+			"source": "https://support.google.com/mail/answer/6584",
+			"checked": "2026-09-26"
+		}
+	],
+	"sizes": [8, 25, 50, 100]
+}

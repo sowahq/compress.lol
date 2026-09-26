@@ -1,3 +1,5 @@
+import presetData from './presets.json';
+
 export const MEGABYTE = 1000 * 1000;
 
 export type PresetGroup = 'platform' | 'size';
@@ -9,30 +11,29 @@ export interface TargetPreset {
 	sizeMb: number;
 }
 
-const platform = (id: string, name: string, sizeMb: number): TargetPreset => ({
-	id,
-	group: 'platform',
-	name,
-	sizeMb
-});
+export interface PlatformPresetData {
+	id: string;
+	name: string;
+	sizeMb: number;
+	note: string;
+	source: string;
+	checked: string;
+}
 
-const size = (sizeMb: number): TargetPreset => ({
-	id: `size-${sizeMb}`,
-	group: 'size',
-	name: null,
-	sizeMb
-});
+export interface PresetData {
+	platforms: PlatformPresetData[];
+	sizes: number[];
+}
+
+export const PRESET_DATA: PresetData = presetData;
 
 export const TARGET_PRESETS: readonly TargetPreset[] = [
-	platform('discord', 'Discord', 20),
-	platform('discord-nitro-basic', 'Discord Nitro Basic', 50),
-	platform('discord-nitro', 'Discord Nitro', 500),
-	platform('whatsapp', 'WhatsApp', 16),
-	platform('email', 'Gmail / Outlook', 18),
-	size(8),
-	size(25),
-	size(50),
-	size(100)
+	...PRESET_DATA.platforms.map(
+		({ id, name, sizeMb }): TargetPreset => ({ id, group: 'platform', name, sizeMb })
+	),
+	...PRESET_DATA.sizes.map(
+		(sizeMb): TargetPreset => ({ id: `size-${sizeMb}`, group: 'size', name: null, sizeMb })
+	)
 ];
 
 export const CUSTOM_PRESET_ID = 'custom';

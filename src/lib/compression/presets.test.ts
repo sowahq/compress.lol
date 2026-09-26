@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
 	CUSTOM_MAX_MB,
 	CUSTOM_MIN_MB,
+	CUSTOM_PRESET_ID,
+	PRESET_DATA,
 	DEFAULT_SELECTION,
 	TARGET_PRESETS,
 	findPreset,
@@ -158,5 +160,49 @@ describe('restoreSelection', () => {
 	it('round-trips through serializeSelection', () => {
 		const selection = { presetId: 'custom', customMb: 7.5 };
 		expect(restoreSelection(serializeSelection(selection), null)).toEqual(selection);
+	});
+});
+
+describe('presets.json', () => {
+	const KEBAB_CASE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+	const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+	describe.each(PRESET_DATA.platforms)('$id', (platform) => {
+		it('has a kebab-case id that cannot clash with sizes or the custom choice', () => {
+			expect(platform.id).toMatch(KEBAB_CASE);
+			expect(platform.id.startsWith('size-')).toBe(false);
+			expect(platform.id).not.toBe(CUSTOM_PRESET_ID);
+		});
+
+		it('has a name and a note', () => {
+			expect(platform.name.trim()).toBe(platform.name);
+			expect(platform.name.length).toBeGreaterThan(0);
+			expect(platform.note.trim().length).toBeGreaterThan(0);
+		});
+
+		it('has a size within the custom size bounds', () => {
+			expect(platform.sizeMb).toBeGreaterThanOrEqual(CUSTOM_MIN_MB);
+			expect(platform.sizeMb).toBeLessThanOrEqual(CUSTOM_MAX_MB);
+		});
+
+		it('cites an https source checked on a real, past date', () => {
+			expect(new URL(platform.source).protocol).toBe('https:');
+			expect(platform.checked).toMatch(ISO_DATE);
+			const checked = new Date(`${platform.checked}T00:00:00Z`);
+			expect(checked.toISOString().slice(0, 10)).toBe(platform.checked);
+			expect(checked.getTime()).toBeLessThanOrEqual(Date.now());
+		});
+	});
+
+	it('has unique platform ids', () => {
+		const ids = PRESET_DATA.platforms.map((platform) => platform.id);
+		expect(new Set(ids).size).toBe(ids.length);
+	});
+
+	it('lists generic sizes as increasing whole megabytes within bounds', () => {
+		const { sizes } = PRESET_DATA;
+		expect(sizes.every((size) => Number.isInteger(size) && size >= CUSTOM_MIN_MB)).toBe(true);
+		expect(sizes.every((size) => size <= CUSTOM_MAX_MB)).toBe(true);
+		expect(sizes.every((size, index) => index === 0 || size > sizes[index - 1])).toBe(true);
 	});
 });

@@ -1,3 +1,4 @@
+import type { FFmpeg } from '@ffmpeg/ffmpeg';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OUTPUT_FILE } from './args';
 import {
@@ -376,17 +377,21 @@ describe('loadFFmpegCore', () => {
 	it('loads the verified files and revokes their blob URLs afterwards', async () => {
 		const createObjectURL = vi.spyOn(URL, 'createObjectURL');
 		const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL');
-		const load = vi.fn(async () => true);
+		const contents = new Map<string, string>();
+		const load = vi.fn<FFmpeg['load']>(async (config) => {
+			for (const url of [config?.coreURL, config?.wasmURL, config?.workerURL]) {
+				if (url) contents.set(url, await (await fetch(url)).text());
+			}
+			return true;
+		});
 
 		await loadFFmpegCore({ load }, echoFetcher, await assetsFor());
 
+		const [config] = load.mock.calls[0];
+		expect(contents.get(config?.coreURL ?? '')).toBe('core.js');
+		expect(contents.get(config?.wasmURL ?? '')).toBe('core.wasm');
+		expect(contents.get(config?.workerURL ?? '')).toBe('worker.js');
 		const created = createObjectURL.mock.results.map((result) => result.value);
-		expect(created).toHaveLength(3);
-		expect(load).toHaveBeenCalledWith({
-			coreURL: created[0],
-			wasmURL: created[1],
-			workerURL: created[2]
-		});
 		expect(revokeObjectURL.mock.calls.map(([url]) => url).sort()).toEqual([...created].sort());
 	});
 

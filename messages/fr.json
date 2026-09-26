@@ -30,6 +30,7 @@
 	"upload_compress_message": "Téléversez et compressez une vidéo pour voir les résultats ici",
 	"target_size_warning": "La vidéo compressée est plus grande que la taille cible. Essayez de sélectionner une cible plus petite ou une vidéo plus courte.",
 	"target_unreachable_error": "Cette vidéo est trop longue pour la taille cible choisie : il faut au moins {minimum}. Choisissez une cible plus grande, raccourcissez la vidéo ou coupez le son.",
+	"slow_engine_notice": "Votre navigateur ne peut pas utiliser l'encodage matériel pour ce fichier : la compression sera plus lente.",
 	"small_video_warning": "Le fichier original est déjà plus petit que la taille cible sélectionnée. La recompression peut augmenter sa taille. Choisissez une cible plus petite ou conservez le fichier tel quel.",
 	"how_it_works": "Comment ça marche",
 	"how_target_size": "Choisissez votre taille cible - Nous compresserons parfaitement votre vidéo !",

@@ -1,7 +1,5 @@
 <script lang="ts">
-	import { FFmpeg } from '@ffmpeg/ffmpeg';
-	// @ts-ignore
-	import type { LogEvent, ProgressEvent } from '@ffmpeg/ffmpeg/dist/esm/types';
+	import { FFmpeg, type LogEvent, type ProgressEvent } from '@ffmpeg/ffmpeg';
 	import { onMount } from 'svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as Select from '$lib/components/ui/select/index.js';
@@ -18,8 +16,7 @@
 	import Settings from '@lucide/svelte/icons/settings';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import {
-		detectMotion,
-		estimateBitrateKbps,
+		buildVideoMetadata,
 		minimumTargetSize,
 		type VideoMetadata
 	} from '$lib/compression/settings';
@@ -33,11 +30,13 @@
 	import {
 		loadFFmpegCore,
 		optimalThreadCount,
-		parseFpsFromLog,
+		probeWithFFmpeg,
 		runFFmpeg,
 		toProgressPercent,
 		withMountedFile
 	} from '$lib/compression/ffmpeg';
+	import { isWebCodecsAvailable } from '$lib/compression/webcodecs-support';
+	import { createFallbackEncoder, type Engine } from '$lib/compression/engine';
 	import {
 		durationBucket,
 		failureReason,
@@ -55,8 +54,10 @@
 		description: string;
 	}
 
-	let ffmpeg = $state<FFmpeg>();
-	let isLoaded = $state(false);
+	let ffmpegLoading = $state(false);
+	let isAnalyzing = $state(false);
+	let readableByWebCodecs = $state(false);
+	let activeEngine = $state<Engine | null>(null);
 	let isProcessing = $state(false);
 	let progress = $state(0);
 	let encodeAttempt = $state(0);
@@ -104,61 +105,67 @@
 				handleTargetChange(savedTarget);
 			}
 		} catch (e) {}
-		await loadFFmpeg();
 		isChromium = isChromiumByFeatures();
 	});
 
-	const loadFFmpeg = async (): Promise<void> => {
+	const updateProgress = (percent: number): void => {
+		progress = percent;
+		if (startTime > 0 && progress > 5) {
+			const elapsed = (Date.now() - startTime) / 1000;
+			const rate = progress / elapsed;
+			if (rate > 0) {
+				estimatedTimeRemaining = Math.round((100 - progress) / rate);
+			}
+		}
+	};
+
+	let ffmpegInstance: Promise<FFmpeg> | null = null;
+
+	const createFFmpeg = async (): Promise<FFmpeg> => {
+		ffmpegLoading = true;
+		message = 'Loading ffmpeg-core.js';
 		try {
-			ffmpeg = new FFmpeg();
-
-			message = 'Loading ffmpeg-core.js';
-
-			ffmpeg.on('log', ({ message: msg }: LogEvent) => {
+			const instance = new FFmpeg();
+			instance.on('log', ({ message: msg }: LogEvent) => {
 				message = msg;
 				if (msg.includes('Last message repeated') || msg.includes('Past duration')) {
 					console.warn('Possible hang detected:', msg);
 				}
 			});
-
-			ffmpeg.on('progress', ({ progress: prog }: ProgressEvent) => {
+			instance.on('progress', ({ progress: prog }: ProgressEvent) => {
 				const percent = toProgressPercent(prog);
-				if (percent === null) return;
-				progress = percent;
-				if (startTime > 0 && progress > 5) {
-					const elapsed = (Date.now() - startTime) / 1000;
-					const rate = progress / elapsed;
-					if (rate > 0) {
-						estimatedTimeRemaining = Math.round((100 - progress) / rate);
-					}
-				}
+				if (percent !== null) updateProgress(percent);
 			});
-
-			await loadFFmpegCore(ffmpeg);
-
-			console.log('FFmpeg load completed!');
-			isLoaded = true;
-			message = 'Ready to compress videos!';
-			console.log('isLoaded set to:', isLoaded);
+			await loadFFmpegCore(instance);
+			return instance;
 		} catch (error) {
-			console.error('Failed to load FFmpeg:', error);
 			trackEvent('ffmpeg_load_failed', {
 				browser: browserFamily(),
 				cross_origin_isolated: globalThis.crossOriginIsolated === true
 			});
-			errorMessage = 'Failed to load FFmpeg. Please refresh the page.';
-			message = 'Failed to load FFmpeg';
+			throw error;
+		} finally {
+			ffmpegLoading = false;
 		}
+	};
+
+	const ensureFFmpeg = (): Promise<FFmpeg> => {
+		ffmpegInstance ??= createFFmpeg().catch((error: unknown) => {
+			ffmpegInstance = null;
+			throw error;
+		});
+		return ffmpegInstance;
+	};
+
+	const resetFFmpeg = async (): Promise<void> => {
+		const current = ffmpegInstance;
+		ffmpegInstance = null;
+		const instance = await current?.catch(() => null);
+		instance?.terminate();
 	};
 
 	const processingMode = (): ProcessingMode => (audioOnlyMode ? 'audio_only' : 'compress');
 	const browserFamily = (): Browser => (isChromiumByFeatures() ? 'chromium' : 'other');
-
-	const reloadFFmpeg = async (): Promise<void> => {
-		ffmpeg?.terminate();
-		isLoaded = false;
-		await loadFFmpeg();
-	};
 
 	const handleFileSelect = (event: Event): void => {
 		const target = event.target as HTMLInputElement;
@@ -183,7 +190,7 @@
 			originalSize = file.size;
 			errorMessage = '';
 			processedVideo = null;
-			getVideoMetadata(file);
+			analyzeFile(file);
 		} else {
 			if (file) {
 				trackEvent('file_rejected', { reason: 'unsupported_type' });
@@ -192,97 +199,52 @@
 		}
 	};
 
-	const detectVideoFps = async (file: File): Promise<number> => {
-		if (!ffmpeg || !isLoaded) {
-			console.warn('FFmpeg not loaded, falling back to default FPS');
-			return 30;
-		}
+	let analysisId = 0;
 
-		const instance = ffmpeg;
+	const loadWebCodecsEngine = () => import('$lib/compression/webcodecs');
 
-		try {
-			let detectedFps: number | null = null;
-
-			const logHandler = ({ message: msg }: LogEvent) => {
-				detectedFps ??= parseFpsFromLog(msg);
-			};
-
-			instance.on('log', logHandler);
-
-			try {
-				await withMountedFile(instance, file, `/probe_${Date.now()}`, (inputPath) =>
-					instance.exec(['-i', inputPath, '-frames:v', '1', '-f', 'null', '-'])
-				);
-			} finally {
-				instance.off('log', logHandler);
-			}
-
-			return detectedFps ?? 30;
-		} catch (error) {
-			console.error('FPS detection failed:', error);
-			return 30;
-		}
+	const probeWithFFmpegFallback = async (file: File): Promise<VideoMetadata | null> => {
+		const probe = await probeWithFFmpeg(await ensureFFmpeg(), file);
+		return probe ? buildVideoMetadata(probe) : null;
 	};
 
-	const getVideoMetadata = async (file: File): Promise<void> => {
+	const analyzeFile = async (file: File): Promise<void> => {
+		const id = ++analysisId;
+		videoMetadata = null;
+		readableByWebCodecs = false;
+		isAnalyzing = true;
 		try {
-			const video = document.createElement('video');
-			video.src = URL.createObjectURL(file);
-
-			await new Promise<void>((resolve) => {
-				video.onloadedmetadata = () => {
-					let detectedCodec = 'unknown';
-					const fileName = file.name.toLowerCase();
-					if (fileName.includes('h264') || fileName.includes('avc')) detectedCodec = 'h264';
-					else if (fileName.includes('h265') || fileName.includes('hevc')) detectedCodec = 'h265';
-					else if (fileName.includes('vp9')) detectedCodec = 'vp9';
-					else if (fileName.includes('av1')) detectedCodec = 'av1';
-
-					const estimatedBitrate = estimateBitrateKbps(file.size, video.duration);
-					const hasMotion = detectMotion(estimatedBitrate, video.videoWidth, video.videoHeight);
-
-					// Set initial metadata with default FPS (will be detected in background)
-					videoMetadata = {
-						duration: video.duration,
-						bitrate: estimatedBitrate,
-						resolution: `${video.videoWidth}x${video.videoHeight}`,
-						codec: detectedCodec,
-						size: file.size,
-						fps: 30, // Default, will be updated by background FPS detection
-						hasMotion
-					};
-					URL.revokeObjectURL(video.src);
-					trackEvent('video_selected', {
-						resolution: resolutionTier(videoMetadata.resolution),
-						size: sizeBucket(file.size),
-						duration: durationBucket(video.duration),
-						container: fileContainer(file.name)
-					});
-					resolve();
-				};
+			const { probeVideo } = await loadWebCodecsEngine();
+			const probed = await probeVideo(file);
+			const metadata = probed ?? (await probeWithFFmpegFallback(file));
+			if (id !== analysisId) return;
+			if (!metadata) {
+				trackEvent('file_rejected', { reason: 'unsupported_type' });
+				errorMessage = m.select_valid_video();
+				return;
+			}
+			readableByWebCodecs = probed !== null;
+			videoMetadata = metadata;
+			trackEvent('video_selected', {
+				resolution: resolutionTier(metadata.resolution),
+				size: sizeBucket(file.size),
+				duration: durationBucket(metadata.duration),
+				container: fileContainer(file.name)
 			});
-
-			// Detect FPS in background after basic metadata is loaded
-			detectVideoFps(file)
-				.then((fps) => {
-					if (videoMetadata) {
-						videoMetadata = { ...videoMetadata, fps };
-						console.log(`✓ Video FPS detected: ${fps} fps`);
-					}
-				})
-				.catch((error) => {
-					console.error('FPS detection failed, using fallback:', error);
-					if (videoMetadata) {
-						videoMetadata = { ...videoMetadata, fps: 30 };
-					}
-				});
 		} catch (error) {
-			console.error('Failed to get video metadata:', error);
+			console.error('Failed to analyze video:', error);
+			if (id === analysisId) {
+				errorMessage = 'Failed to load FFmpeg. Please refresh the page.';
+			}
+		} finally {
+			if (id === analysisId) {
+				isAnalyzing = false;
+			}
 		}
 	};
 
 	const compressVideo = async (): Promise<void> => {
-		if (!selectedFile || !isLoaded || !videoMetadata || !ffmpeg || isTargetUnreachable) return;
+		if (!selectedFile || !videoMetadata || isAnalyzing || isTargetUnreachable) return;
 
 		isProcessing = true;
 		progress = 0;
@@ -292,7 +254,6 @@
 		const jobStartTime = startTime;
 		estimatedTimeRemaining = 0;
 
-		const instance = ffmpeg;
 		const file = selectedFile;
 		const metadata = videoMetadata;
 		const trim = currentTrim;
@@ -313,7 +274,10 @@
 			trim: trimVideo
 		});
 
-		const encodeWith = (buildArgs: (inputPath: string) => string[]): Promise<Uint8Array> => {
+		const encodeWithFFmpeg = async (
+			buildArgs: (inputPath: string) => string[]
+		): Promise<Uint8Array> => {
+			const instance = await ensureFFmpeg();
 			message = 'Mounting input file...';
 			return withMountedFile(instance, file, '/input', (inputPath) => {
 				const args = buildArgs(inputPath);
@@ -323,10 +287,53 @@
 			});
 		};
 
+		const encoder = audioOnly
+			? null
+			: createFallbackEncoder({
+					preferWebCodecs: readableByWebCodecs && isWebCodecsAvailable(),
+					initialFallbackReason: isWebCodecsAvailable()
+						? 'unreadable_container'
+						: 'webcodecs_unavailable',
+					webcodecs: async (sizeBudget) =>
+						(await loadWebCodecsEngine()).encodeWithWebCodecs(
+							file,
+							metadata,
+							{
+								targetSize: sizeBudget,
+								preserveOriginalFps: preserveFps,
+								muteSound: mute,
+								trim,
+								bitrateMode: 'variable'
+							},
+							updateProgress
+						),
+					ffmpeg: (sizeBudget) =>
+						encodeWithFFmpeg((inputPath) =>
+							buildCompressionArgs(inputPath, metadata, {
+								targetSize: sizeBudget,
+								preserveOriginalFps: preserveFps,
+								muteSound: mute,
+								threadCount: isChromium ? optimalThreadCount() : 1,
+								trim
+							})
+						),
+					onFallback: () => {
+						activeEngine = 'ffmpeg';
+						progress = 0;
+						startTime = Date.now();
+						estimatedTimeRemaining = 0;
+					}
+				});
+		const engineReport = () => ({
+			engine: encoder?.engine ?? 'ffmpeg',
+			fallback_reason: encoder?.fallbackReason ?? 'audio_only'
+		});
+		activeEngine = encoder?.engine ?? 'ffmpeg';
+
 		try {
-			const { data, attempts } = audioOnly
+			const { data, attempts } = !encoder
 				? {
-						data: await encodeWith((inputPath) =>
+						data: await encodeWithFFmpeg((inputPath) =>
 							buildAudioOnlyArgs(inputPath, metadata.duration, trim, mute)
 						),
 						attempts: 1
@@ -339,15 +346,7 @@
 							progress = 0;
 							startTime = Date.now();
 							estimatedTimeRemaining = 0;
-							return encodeWith((inputPath) =>
-								buildCompressionArgs(inputPath, metadata, {
-									targetSize: sizeBudget,
-									preserveOriginalFps: preserveFps,
-									muteSound: mute,
-									threadCount: isChromium ? optimalThreadCount() : 1,
-									trim
-								})
-							);
+							return encoder.encode(sizeBudget);
 						}
 					});
 
@@ -358,7 +357,8 @@
 				seconds: Math.round((Date.now() - jobStartTime) / 1000),
 				reduction_percent: Math.round((1 - data.length / metadata.size) * 100),
 				target_met: data.length <= targetSize,
-				attempts
+				attempts,
+				...engineReport()
 			});
 			message = audioOnly
 				? 'Audio processing completed successfully!'
@@ -369,13 +369,17 @@
 				...job,
 				resolution,
 				fps: metadata.fps,
-				reason: failureReason(error)
+				reason: failureReason(error),
+				...engineReport()
 			});
 			errorMessage = 'Video compression failed. Please try again with different settings.';
 			message = 'Compression failed';
-			await reloadFFmpeg();
+			if (engineReport().engine === 'ffmpeg') {
+				await resetFFmpeg();
+			}
 		} finally {
 			isProcessing = false;
+			activeEngine = null;
 			progress = 0;
 			encodeAttempt = 0;
 			startTime = 0;
@@ -504,7 +508,7 @@
 		<p class="text-muted-foreground">{m.app_subtitle()}</p>
 	</div>
 
-	{#if !isLoaded}
+	{#if ffmpegLoading || isAnalyzing}
 		<div class="mb-6 flex items-center justify-center gap-1">
 			<Loader class="h-5 w-5 animate-spin text-primary" />
 			<span class="text-sm text-muted-foreground">{m.loading()}</span>
@@ -531,7 +535,7 @@
 						type="file"
 						accept="video/*"
 						onchange={handleFileSelect}
-						disabled={!isLoaded}
+						disabled={isProcessing}
 						class="mt-2"
 					/>
 				</div>
@@ -715,7 +719,11 @@
 
 				<Button
 					onclick={compressVideo}
-					disabled={!selectedFile || !isLoaded || isProcessing || isTargetUnreachable}
+					disabled={!selectedFile ||
+						!videoMetadata ||
+						isAnalyzing ||
+						isProcessing ||
+						isTargetUnreachable}
 					class="w-full"
 				>
 					{#if isProcessing}
@@ -724,6 +732,12 @@
 						{audioOnlyMode ? m.process_audio_only() : m.compress_video()}
 					{/if}
 				</Button>
+
+				{#if isProcessing && activeEngine === 'ffmpeg' && !audioOnlyMode}
+					<Alert.Root>
+						<Alert.Description>{m.slow_engine_notice()}</Alert.Description>
+					</Alert.Root>
+				{/if}
 
 				{#if isProcessing && progress > 0}
 					<div class="space-y-2">

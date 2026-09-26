@@ -30,6 +30,7 @@
 	"upload_compress_message": "Wrzuć i skompresuj jakiś film, a wyniki pojawią się tutaj",
 	"target_size_warning": "Skompresowany film jest większy niż rozmiar docelowy. Wybierz inny cel albo krótsze wideo.",
 	"target_unreachable_error": "Ten film jest zbyt długi dla wybranego rozmiaru docelowego: potrzeba co najmniej {minimum}. Wybierz większy rozmiar, przytnij film lub wycisz dźwięk.",
+	"slow_engine_notice": "Twoja przeglądarka nie może użyć sprzętowego kodowania dla tego pliku, więc kompresja potrwa dłużej.",
 	"small_video_warning": "Oryginalny plik jest już mniejszy niż wybrany limit. Kompresja może zwiększyć jego rozmiar. Wybierz mniejszy limit albo pozostaw plik bez zmian.",
 	"how_it_works": "Jak to działa?",
 	"how_target_size": "Wybierz docelowy rozmiar - skompresujemy Twój plik, aby osiągnął dokładnie ten rozmiar!",

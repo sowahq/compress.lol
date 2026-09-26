@@ -1,3 +1,5 @@
+import type { Engine } from './compression/engine';
+
 export const UMAMI_WEBSITE_ID = '7dc6161d-a41d-454a-851d-79e9e89f4bd3';
 export const UMAMI_SCRIPT_URL = '/stats/s.js';
 export const UMAMI_HOST_URL = '/stats';
@@ -13,6 +15,11 @@ type JobData = {
 	mode: ProcessingMode;
 	target: string;
 	browser: Browser;
+};
+
+type EngineData = {
+	engine: Engine;
+	fallback_reason: string;
 };
 
 export type AnalyticsEvents = {
@@ -31,17 +38,19 @@ export type AnalyticsEvents = {
 		preserve_fps: boolean;
 		trim: boolean;
 	};
-	compression_succeeded: JobData & {
-		seconds: number;
-		reduction_percent: number;
-		target_met: boolean;
-		attempts: number;
-	};
-	compression_failed: JobData & {
-		resolution: string;
-		fps: number;
-		reason: string;
-	};
+	compression_succeeded: JobData &
+		EngineData & {
+			seconds: number;
+			reduction_percent: number;
+			target_met: boolean;
+			attempts: number;
+		};
+	compression_failed: JobData &
+		EngineData & {
+			resolution: string;
+			fps: number;
+			reason: string;
+		};
 	video_downloaded: { mode: ProcessingMode; target: string };
 };
 

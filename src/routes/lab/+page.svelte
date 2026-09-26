@@ -34,9 +34,18 @@
 		seconds: number;
 		size: number;
 		attempts: number;
+		targetMet: boolean;
 		detail: string;
 		url: string;
 	}
+
+	type FFmpegState = 'loading' | 'ready' | 'failed';
+
+	const FFMPEG_BADGE_VARIANT = {
+		loading: 'secondary',
+		ready: 'default',
+		failed: 'destructive'
+	} as const satisfies Record<FFmpegState, 'secondary' | 'default' | 'destructive'>;
 
 	const MB = 1024 * 1024;
 	const TARGETS = [8, 10, 25, 50, 100];
@@ -44,7 +53,7 @@
 	const NO_TRIM: TrimOptions = { enabled: false, skipFirstSeconds: 0, skipLastSeconds: 0 };
 
 	let ffmpeg = $state<FFmpeg>();
-	let ffmpegReady = $state(false);
+	let ffmpegState = $state<FFmpegState>('loading');
 	let file = $state<File | null>(null);
 	let metadata = $state<VideoMetadata | null>(null);
 	let probeFailed = $state(false);
@@ -52,7 +61,11 @@
 	let running = $state(false);
 	let results = $state<LabResult[]>([]);
 
-	onMount(async (): Promise<void> => {
+	const revokeResultUrls = (): void => {
+		results.forEach((result) => result.url && URL.revokeObjectURL(result.url));
+	};
+
+	const loadFFmpeg = async (): Promise<void> => {
 		const instance = new FFmpeg();
 		instance.on('progress', ({ progress }) => {
 			const percent = toProgressPercent(progress);
@@ -61,20 +74,34 @@
 				current.progress = percent;
 			}
 		});
-		await loadFFmpegCore(instance);
-		ffmpeg = instance;
-		ffmpegReady = true;
+		try {
+			await loadFFmpegCore(instance);
+			ffmpeg = instance;
+			ffmpegState = 'ready';
+		} catch (error) {
+			console.error('Failed to load FFmpeg:', error);
+			ffmpegState = 'failed';
+		}
+	};
+
+	onMount(() => {
+		void loadFFmpeg();
+		return revokeResultUrls;
 	});
 
 	const handleFile = async (event: Event): Promise<void> => {
 		const input = event.currentTarget;
 		if (!(input instanceof HTMLInputElement)) return;
-		file = input.files?.[0] ?? null;
+		const selected = input.files?.[0] ?? null;
+		file = selected;
+		revokeResultUrls();
 		results = [];
 		metadata = null;
 		probeFailed = false;
-		metadata = file ? await probeVideo(file) : null;
-		probeFailed = !!file && !metadata;
+		const probed = selected ? await probeVideo(selected) : null;
+		if (file !== selected) return;
+		metadata = probed;
+		probeFailed = !!selected && !probed;
 	};
 
 	const encodeWithFFmpeg = (source: File, meta: VideoMetadata, sizeBudget: number) => {
@@ -125,7 +152,7 @@
 		const meta = metadata;
 		const targetSize = Number(targetMb) * MB;
 		running = true;
-		results.forEach((result) => result.url && URL.revokeObjectURL(result.url));
+		revokeResultUrls();
 		results = ENGINES.map((engine) => ({
 			engine,
 			status: 'pending',
@@ -133,6 +160,7 @@
 			seconds: 0,
 			size: 0,
 			attempts: 0,
+			targetMet: false,
 			detail: '',
 			url: ''
 		}));
@@ -141,7 +169,7 @@
 			result.status = 'running';
 			const startedAt = performance.now();
 			try {
-				const { data, attempts } = await encodeToTarget({
+				const { data, attempts, targetMet } = await encodeToTarget({
 					targetSize,
 					minimumBudget: minimumTargetSize(meta.duration, meta.hasMotion, false),
 					encode: (sizeBudget) => {
@@ -152,6 +180,7 @@
 				result.seconds = (performance.now() - startedAt) / 1000;
 				result.size = data.length;
 				result.attempts = attempts;
+				result.targetMet = targetMet;
 				result.url = URL.createObjectURL(new Blob([new Uint8Array(data)], { type: 'video/mp4' }));
 				result.status = 'done';
 			} catch (error) {
@@ -181,8 +210,8 @@
 		</Card.Header>
 		<Card.Content class="space-y-4">
 			<div class="flex flex-wrap gap-2 text-sm">
-				<Badge variant={ffmpegReady ? 'default' : 'secondary'}>
-					ffmpeg.wasm {ffmpegReady ? 'ready' : 'loading'}
+				<Badge variant={FFMPEG_BADGE_VARIANT[ffmpegState]}>
+					ffmpeg.wasm {ffmpegState}
 				</Badge>
 				<Badge variant={isWebCodecsAvailable() ? 'default' : 'destructive'}>
 					WebCodecs {isWebCodecsAvailable() ? 'available' : 'unavailable'}
@@ -226,7 +255,7 @@
 				</p>
 			{/if}
 
-			<Button onclick={runBenchmark} disabled={!metadata || !ffmpegReady || running}>
+			<Button onclick={runBenchmark} disabled={!metadata || ffmpegState === 'loading' || running}>
 				{running ? 'Running…' : 'Run benchmark'}
 			</Button>
 		</Card.Content>
@@ -259,7 +288,7 @@
 								<td data-size={result.size}>{result.size ? formatMb(result.size) : '-'}</td>
 								<td>
 									{#if result.status === 'done'}
-										{result.size <= Number(targetMb) * MB ? 'yes' : 'no'}
+										{result.targetMet ? 'yes' : 'no'}
 									{:else}
 										-
 									{/if}

@@ -1,6 +1,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "compress-lol",
+	"account_id": "b002cc6e1fe46091b270bcb3ff900845",
 	"main": ".svelte-kit/cloudflare/_worker.js",
 	"compatibility_date": "2026-09-01",
 	"compatibility_flags": ["nodejs_compat"],

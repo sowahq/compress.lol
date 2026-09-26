@@ -58,9 +58,12 @@ describe('calculateOptimalResolution', () => {
 		{ width: 1280, height: 720, maxWidth: 1440, expected: '1280x720' }
 	];
 
-	it.each(cases)('$width x $height capped at $maxWidth', ({ width, height, maxWidth, expected }) => {
-		expect(calculateOptimalResolution(width, height, maxWidth)).toBe(expected);
-	});
+	it.each(cases)(
+		'$width x $height capped at $maxWidth',
+		({ width, height, maxWidth, expected }) => {
+			expect(calculateOptimalResolution(width, height, maxWidth)).toBe(expected);
+		}
+	);
 });
 
 describe('calculateCompressionSettings', () => {

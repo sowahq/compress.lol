@@ -9,7 +9,10 @@ import {
 	type RunnableFFmpeg
 } from './ffmpeg';
 
-const createRunner = (exitCode: number, output: Uint8Array | string = new Uint8Array([1, 2, 3])) => {
+const createRunner = (
+	exitCode: number,
+	output: Uint8Array | string = new Uint8Array([1, 2, 3])
+) => {
 	const calls: string[] = [];
 	const runner: RunnableFFmpeg = {
 		exec: vi.fn<RunnableFFmpeg['exec']>(async () => {
@@ -30,16 +33,14 @@ const createRunner = (exitCode: number, output: Uint8Array | string = new Uint8A
 
 const createMounter = (failures: Partial<Record<keyof MountableFFmpeg, Error>> = {}) => {
 	const calls: string[] = [];
-	const step =
-		(name: keyof MountableFFmpeg) =>
-		async (): Promise<boolean> => {
-			calls.push(name);
-			const failure = failures[name];
-			if (failure) {
-				throw failure;
-			}
-			return true;
-		};
+	const step = (name: keyof MountableFFmpeg) => async (): Promise<boolean> => {
+		calls.push(name);
+		const failure = failures[name];
+		if (failure) {
+			throw failure;
+		}
+		return true;
+	};
 	const mounter: MountableFFmpeg = {
 		createDir: vi.fn<MountableFFmpeg['createDir']>(step('createDir')),
 		mount: vi.fn<MountableFFmpeg['mount']>(step('mount')),
@@ -179,7 +180,11 @@ describe('parseFpsFromLog', () => {
 			line: 'frame=   60 fps=7.0 q=28.0 size=    7680kB time=00:00:01.94',
 			expected: null
 		},
-		{ name: 'duration line is ignored', line: '  Duration: 00:00:30.02, start: 0.000000', expected: null }
+		{
+			name: 'duration line is ignored',
+			line: '  Duration: 00:00:30.02, start: 0.000000',
+			expected: null
+		}
 	];
 
 	it.each(cases)('$name', ({ line, expected }) => {

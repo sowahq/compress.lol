@@ -107,8 +107,7 @@
 			if (savedTarget) {
 				handleTargetChange(savedTarget);
 			}
-		} catch (e) {
-		}
+		} catch (e) {}
 		await loadFFmpeg();
 		isChromium = isChromiumByFeatures();
 	});
@@ -429,8 +428,7 @@
 			selectedTarget = target;
 			try {
 				localStorage.setItem('targetSize', value);
-			} catch (e) {
-			}
+			} catch (e) {}
 		}
 	};
 </script>
@@ -611,10 +609,7 @@
 										class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
 									/>
 									<div class="grid gap-1">
-										<label
-											for="trim-video"
-											class="cursor-pointer text-sm leading-none font-medium"
-										>
+										<label for="trim-video" class="cursor-pointer text-sm leading-none font-medium">
 											{m.trim_video()}
 										</label>
 										<p class="text-xs text-muted-foreground">
@@ -622,27 +617,27 @@
 										</p>
 									</div>
 								</div>
-								
+
 								{#if trimVideo}
 									<div class="grid grid-cols-2 gap-4 pl-7">
 										<div class="space-y-1.5">
 											<Label for="skip-first" class="text-xs">{m.skip_first_seconds()}</Label>
-											<Input 
-												id="skip-first" 
-												type="number" 
-												min="0" 
-												bind:value={skipFirstSeconds} 
-												class="h-8 text-sm" 
+											<Input
+												id="skip-first"
+												type="number"
+												min="0"
+												bind:value={skipFirstSeconds}
+												class="h-8 text-sm"
 											/>
 										</div>
 										<div class="space-y-1.5">
 											<Label for="skip-last" class="text-xs">{m.skip_last_seconds()}</Label>
-											<Input 
-												id="skip-last" 
-												type="number" 
-												min="0" 
-												bind:value={skipLastSeconds} 
-												class="h-8 text-sm" 
+											<Input
+												id="skip-last"
+												type="number"
+												min="0"
+												bind:value={skipLastSeconds}
+												class="h-8 text-sm"
 											/>
 										</div>
 									</div>

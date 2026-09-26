@@ -18,7 +18,11 @@ export interface CompressionArgsOptions {
 
 const OUTPUT_ARGS = ['-movflags', '+faststart', '-f', 'mp4', '-y', OUTPUT_FILE];
 
-export const buildInputArgs = (inputPath: string, duration: number, trim: TrimOptions): string[] => {
+export const buildInputArgs = (
+	inputPath: string,
+	duration: number,
+	trim: TrimOptions
+): string[] => {
 	const args: string[] = [];
 	if (trim.enabled && trim.skipFirstSeconds > 0) {
 		args.push('-ss', trim.skipFirstSeconds.toString());

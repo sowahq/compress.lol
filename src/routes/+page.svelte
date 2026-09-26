@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { FFmpeg, type LogEvent, type ProgressEvent } from '@ffmpeg/ffmpeg';
 	import { onMount } from 'svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as Select from '$lib/components/ui/select/index.js';
@@ -13,31 +12,27 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import LanguageSelector from '$lib/components/ui/selector/language-selector.svelte';
 	import ThemeSelector from '$lib/components/ui/selector/theme-selector.svelte';
-	import Settings from '@lucide/svelte/icons/settings';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import AdvancedSettings from '$lib/components/compression/advanced-settings.svelte';
+	import ResultsCard, {
+		type CompressionResult
+	} from '$lib/components/compression/results-card.svelte';
+	import type { TrimOptions } from '$lib/compression/args';
+	import type { Engine } from '$lib/compression/engine';
+	import { MAX_ENCODE_ATTEMPTS } from '$lib/compression/target';
 	import {
-		buildVideoMetadata,
-		minimumTargetSize,
-		type VideoMetadata
-	} from '$lib/compression/settings';
+		CompressionJobError,
+		createCompressor,
+		outputFileName,
+		requiredTargetSize,
+		validateVideoFile,
+		type VideoAnalysis
+	} from '$lib/compression/compressor';
 	import {
-		buildAudioOnlyArgs,
-		buildCompressionArgs,
-		effectiveDuration,
-		type CompressionArgsOptions,
-		type TrimOptions
-	} from '$lib/compression/args';
-	import { encodeToTarget, MAX_ENCODE_ATTEMPTS } from '$lib/compression/target';
-	import {
-		loadFFmpegCore,
-		optimalThreadCount,
-		probeWithFFmpeg,
-		runFFmpeg,
-		toProgressPercent,
-		withMountedFile
-	} from '$lib/compression/ffmpeg';
-	import { isWebCodecsAvailable } from '$lib/compression/webcodecs-support';
-	import { createFallbackEncoder, NO_FALLBACK, type Engine } from '$lib/compression/engine';
+		estimateRemainingSeconds,
+		formatDuration,
+		formatFileSize,
+		formatTimeRemaining
+	} from '$lib/format';
 	import {
 		durationBucket,
 		failureReason,
@@ -57,36 +52,24 @@
 
 	let ffmpegLoading = $state(false);
 	let isAnalyzing = $state(false);
-	let readableByWebCodecs = $state(false);
+	let analysis = $state<VideoAnalysis | null>(null);
 	let activeEngine = $state<Engine | null>(null);
 	let isProcessing = $state(false);
 	let progress = $state(0);
 	let encodeAttempt = $state(0);
 	let selectedFile = $state<File | null>(null);
 	let processedVideo = $state<Uint8Array | null>(null);
-	let originalSize = $state(0);
-	let compressedSize = $state(0);
+	let result = $state<CompressionResult | null>(null);
 	let errorMessage = $state('');
-	let videoMetadata = $state<VideoMetadata | null>(null);
 	let message = $state('Initializing...');
 	let startTime = $state<number>(0);
 	let estimatedTimeRemaining = $state<number>(0);
-	let showAdvancedSettings = $state(false);
 	let muteSound = $state(false);
 	let audioOnlyMode = $state(false);
 	let preserveOriginalFps = $state(false);
 	let trimVideo = $state(false);
 	let skipFirstSeconds = $state(0);
 	let skipLastSeconds = $state(0);
-
-	const isChromiumByFeatures = (): boolean => {
-		try {
-			// The userAgentData property is available in Chromium browsers but is absent in Firefox/Safari browsers. If userAgentData is ever added to Firefox/Safari, this will need to be updated. However, it's been 4 years.
-			return !!(navigator as any).userAgentData;
-		} catch {
-			return false;
-		}
-	};
 
 	const compressionTargets: CompressionTarget[] = [
 		{ label: '8 MB', value: 8 * 1024 * 1024, description: 'Ultra compression' },
@@ -98,7 +81,7 @@
 	let selectedTargetValue = $state('25 MB');
 	let selectedTarget = $state(compressionTargets[1]);
 
-	onMount(async (): Promise<void> => {
+	onMount((): void => {
 		try {
 			const savedTarget = localStorage.getItem('targetSize');
 			if (savedTarget) {
@@ -107,126 +90,15 @@
 		} catch (e) {}
 	});
 
-	const updateProgress = (percent: number): void => {
-		progress = percent;
-		if (startTime > 0 && progress > 5) {
-			const elapsed = (Date.now() - startTime) / 1000;
-			const rate = progress / elapsed;
-			if (rate > 0) {
-				estimatedTimeRemaining = Math.round((100 - progress) / rate);
-			}
-		}
-	};
-
-	let ffmpegInstance: Promise<FFmpeg> | null = null;
-
-	const createFFmpeg = async (): Promise<FFmpeg> => {
-		ffmpegLoading = true;
-		message = 'Loading ffmpeg-core.js';
+	const browserFamily = (): Browser => {
 		try {
-			const instance = new FFmpeg();
-			instance.on('log', ({ message: msg }: LogEvent) => {
-				message = msg;
-				if (msg.includes('Last message repeated') || msg.includes('Past duration')) {
-					console.warn('Possible hang detected:', msg);
-				}
-			});
-			instance.on('progress', ({ progress: prog }: ProgressEvent) => {
-				const percent = toProgressPercent(prog);
-				if (percent !== null) updateProgress(percent);
-			});
-			await loadFFmpegCore(instance);
-			return instance;
-		} catch (error) {
-			trackEvent('ffmpeg_load_failed', {
-				browser: browserFamily(),
-				cross_origin_isolated: globalThis.crossOriginIsolated === true
-			});
-			throw error;
-		} finally {
-			ffmpegLoading = false;
+			return 'userAgentData' in navigator ? 'chromium' : 'other';
+		} catch {
+			return 'other';
 		}
-	};
-
-	const ensureFFmpeg = (): Promise<FFmpeg> => {
-		ffmpegInstance ??= createFFmpeg().catch((error: unknown) => {
-			ffmpegInstance = null;
-			throw error;
-		});
-		return ffmpegInstance;
-	};
-
-	const resetFFmpeg = async (): Promise<void> => {
-		const current = ffmpegInstance;
-		ffmpegInstance = null;
-		const instance = await current?.catch(() => null);
-		instance?.terminate();
 	};
 
 	const processingMode = (): ProcessingMode => (audioOnlyMode ? 'audio_only' : 'compress');
-	const browserFamily = (): Browser => (isChromiumByFeatures() ? 'chromium' : 'other');
-
-	const handleFileSelect = (event: Event): void => {
-		const target = event.target as HTMLInputElement;
-		const file = target.files?.[0];
-
-		if (
-			file &&
-			(file.type.startsWith('video/') ||
-				file.type === 'video/x-matroska' ||
-				file.type === 'application/x-matroska' ||
-				file.name.match(/\.(mp4|avi|mov|wmv|flv|webm|mkv|m4v|3gp|ogv)$/i))
-		) {
-			const maxSize = 5 * 1024 * 1024 * 1024;
-			if (file.size > maxSize) {
-				trackEvent('file_rejected', { reason: 'too_large' });
-				errorMessage = m.file_size_limit_error();
-				target.value = '';
-				return;
-			}
-
-			selectedFile = file;
-			originalSize = file.size;
-			errorMessage = '';
-			processedVideo = null;
-			analyzeFile(file);
-		} else {
-			if (file) {
-				trackEvent('file_rejected', { reason: 'unsupported_type' });
-			}
-			errorMessage = m.select_valid_video();
-		}
-	};
-
-	let analysisId = 0;
-	let ffmpegProbeQueue: Promise<unknown> = Promise.resolve();
-	let webcodecsFallback: { file: File; reason: string } | null = null;
-
-	type WebCodecsEngine = typeof import('$lib/compression/webcodecs');
-
-	const loadWebCodecsEngine = (): Promise<WebCodecsEngine> => import('$lib/compression/webcodecs');
-
-	const probeWithFFmpegFallback = (file: File): Promise<VideoMetadata | null> => {
-		const probe = ffmpegProbeQueue.then(async () => {
-			const result = await probeWithFFmpeg(await ensureFFmpeg(), file);
-			return result ? buildVideoMetadata(result) : null;
-		});
-		ffmpegProbeQueue = probe.catch(() => undefined);
-		return probe;
-	};
-
-	const initialEngineChoice = (file: File): { preferWebCodecs: boolean; reason: string } => {
-		if (!isWebCodecsAvailable()) {
-			return { preferWebCodecs: false, reason: 'webcodecs_unavailable' };
-		}
-		if (!readableByWebCodecs) {
-			return { preferWebCodecs: false, reason: 'unreadable_container' };
-		}
-		if (webcodecsFallback?.file === file) {
-			return { preferWebCodecs: false, reason: webcodecsFallback.reason };
-		}
-		return { preferWebCodecs: true, reason: NO_FALLBACK };
-	};
 
 	const resetProgress = (): void => {
 		progress = 0;
@@ -234,27 +106,65 @@
 		estimatedTimeRemaining = 0;
 	};
 
+	const compressor = createCompressor({
+		onStatus: (text) => (message = text),
+		onProgress: (percent) => {
+			progress = percent;
+			estimatedTimeRemaining =
+				estimateRemainingSeconds(percent, startTime, Date.now()) ?? estimatedTimeRemaining;
+		},
+		onEncodeStart: ({ engine, attempt }) => {
+			activeEngine = engine;
+			encodeAttempt = attempt;
+			resetProgress();
+		},
+		onFFmpegLoading: (loading) => (ffmpegLoading = loading),
+		onFFmpegLoadError: () =>
+			trackEvent('ffmpeg_load_failed', {
+				browser: browserFamily(),
+				cross_origin_isolated: globalThis.crossOriginIsolated === true
+			})
+	});
+
+	const videoMetadata = $derived(analysis?.metadata ?? null);
+
+	const currentTrim = $derived<TrimOptions>({
+		enabled: trimVideo,
+		skipFirstSeconds,
+		skipLastSeconds
+	});
+
+	const minimumSize = $derived(
+		videoMetadata ? requiredTargetSize(videoMetadata, currentTrim, muteSound) : 0
+	);
+
+	const isTargetUnreachable = $derived(
+		!audioOnlyMode && !!selectedTarget && minimumSize > selectedTarget.value
+	);
+
+	const isFileSmallerThanTarget = $derived(
+		!!selectedTarget && !!selectedFile && selectedFile.size < selectedTarget.value
+	);
+
+	let analysisId = 0;
+
 	const analyzeFile = async (file: File): Promise<void> => {
 		const id = ++analysisId;
-		videoMetadata = null;
-		readableByWebCodecs = false;
+		analysis = null;
 		isAnalyzing = true;
 		try {
-			const { probeVideo } = await loadWebCodecsEngine();
-			const probed = await probeVideo(file);
-			const metadata = probed ?? (await probeWithFFmpegFallback(file));
+			const result = await compressor.analyze(file);
 			if (id !== analysisId) return;
-			if (!metadata) {
+			if (!result) {
 				trackEvent('file_rejected', { reason: 'unsupported_type' });
 				errorMessage = m.select_valid_video();
 				return;
 			}
-			readableByWebCodecs = probed !== null;
-			videoMetadata = metadata;
+			analysis = result;
 			trackEvent('video_selected', {
-				resolution: resolutionTier(metadata.resolution),
+				resolution: resolutionTier(result.metadata.resolution),
 				size: sizeBucket(file.size),
-				duration: durationBucket(metadata.duration),
+				duration: durationBucket(result.metadata.duration),
 				container: fileContainer(file.name)
 			});
 		} catch (error) {
@@ -269,23 +179,43 @@
 		}
 	};
 
+	const handleFileSelect = (event: Event): void => {
+		const input = event.currentTarget;
+		if (!(input instanceof HTMLInputElement)) return;
+		const file = input.files?.[0];
+		const validation = file ? validateVideoFile(file) : 'unsupported_type';
+
+		if (!file || validation === 'unsupported_type') {
+			if (file) {
+				trackEvent('file_rejected', { reason: 'unsupported_type' });
+			}
+			errorMessage = m.select_valid_video();
+			return;
+		}
+		if (validation === 'too_large') {
+			trackEvent('file_rejected', { reason: 'too_large' });
+			errorMessage = m.file_size_limit_error();
+			input.value = '';
+			return;
+		}
+
+		selectedFile = file;
+		errorMessage = '';
+		processedVideo = null;
+		result = null;
+		analyzeFile(file);
+	};
+
 	const compressVideo = async (): Promise<void> => {
-		if (!selectedFile || !videoMetadata || isAnalyzing || isTargetUnreachable) return;
+		if (!selectedFile || !analysis || isAnalyzing || isTargetUnreachable) return;
 
 		isProcessing = true;
 		encodeAttempt = 0;
 		errorMessage = '';
 		resetProgress();
 		const jobStartTime = startTime;
-
-		const file = selectedFile;
-		const metadata = videoMetadata;
-		const trim = currentTrim;
-		const audioOnly = audioOnlyMode;
-		const mute = muteSound;
-		const preserveFps = preserveOriginalFps;
+		const metadata = analysis.metadata;
 		const targetSize = selectedTarget.value;
-		const minimumBudget = minimumSize;
 		const job = { mode: processingMode(), target: selectedTarget.label, browser: browserFamily() };
 		const resolution = resolutionTier(metadata.resolution);
 
@@ -293,116 +223,48 @@
 			...job,
 			resolution,
 			fps: metadata.fps,
-			mute,
-			preserve_fps: preserveFps,
+			mute: muteSound,
+			preserve_fps: preserveOriginalFps,
 			trim: trimVideo
 		});
 
-		const encodeWithFFmpeg = async (
-			buildArgs: (inputPath: string) => string[]
-		): Promise<Uint8Array> => {
-			const instance = await ensureFFmpeg();
-			message = 'Mounting input file...';
-			return withMountedFile(instance, file, '/input', (inputPath) => {
-				const args = buildArgs(inputPath);
-				message = audioOnly ? 'Processing audio only...' : 'Starting compression...';
-				console.log('FFmpeg args:', args);
-				return runFFmpeg(instance, args);
-			});
-		};
-
-		const encodeOptions = (
-			sizeBudget: number
-		): Pick<
-			CompressionArgsOptions,
-			'targetSize' | 'preserveOriginalFps' | 'muteSound' | 'trim'
-		> => ({
-			targetSize: sizeBudget,
-			preserveOriginalFps: preserveFps,
-			muteSound: mute,
-			trim
-		});
-		const engineChoice = initialEngineChoice(file);
-
-		const encoder = audioOnly
-			? null
-			: createFallbackEncoder({
-					preferWebCodecs: engineChoice.preferWebCodecs,
-					initialFallbackReason: engineChoice.reason,
-					webcodecs: async (sizeBudget) => {
-						message = 'Starting compression...';
-						const { encodeWithWebCodecs } = await loadWebCodecsEngine();
-						return encodeWithWebCodecs(
-							file,
-							metadata,
-							{ ...encodeOptions(sizeBudget), bitrateMode: 'variable' },
-							updateProgress
-						);
-					},
-					ffmpeg: (sizeBudget) =>
-						encodeWithFFmpeg((inputPath) =>
-							buildCompressionArgs(inputPath, metadata, {
-								...encodeOptions(sizeBudget),
-								threadCount: isChromiumByFeatures() ? optimalThreadCount() : 1
-							})
-						),
-					onFallback: (reason) => {
-						webcodecsFallback = { file, reason };
-						activeEngine = 'ffmpeg';
-						resetProgress();
-					}
-				});
-		const engineReport = (): { engine: Engine; fallback_reason: string } => ({
-			engine: encoder?.engine ?? 'ffmpeg',
-			fallback_reason: encoder?.fallbackReason ?? 'audio_only'
-		});
-		activeEngine = encoder?.engine ?? 'ffmpeg';
-
 		try {
-			const { data, attempts } = !encoder
-				? {
-						data: await encodeWithFFmpeg((inputPath) =>
-							buildAudioOnlyArgs(inputPath, metadata.duration, trim, mute)
-						),
-						attempts: 1
-					}
-				: await encodeToTarget({
-						targetSize,
-						minimumBudget,
-						encode: (sizeBudget, attempt) => {
-							encodeAttempt = attempt;
-							resetProgress();
-							return encoder.encode(sizeBudget);
-						}
-					});
-
-			processedVideo = data;
-			compressedSize = data.length;
+			const outcome = await compressor.compress({
+				file: selectedFile,
+				analysis,
+				targetSize,
+				audioOnly: audioOnlyMode,
+				muteSound,
+				preserveOriginalFps,
+				trim: currentTrim
+			});
+			processedVideo = outcome.data;
+			result = {
+				originalSize: metadata.size,
+				compressedSize: outcome.data.length,
+				targetSize
+			};
 			trackEvent('compression_succeeded', {
 				...job,
 				seconds: Math.round((Date.now() - jobStartTime) / 1000),
-				reduction_percent: Math.round((1 - data.length / metadata.size) * 100),
-				target_met: data.length <= targetSize,
-				attempts,
-				...engineReport()
+				reduction_percent: Math.round((1 - outcome.data.length / metadata.size) * 100),
+				target_met: outcome.targetMet,
+				attempts: outcome.attempts,
+				engine: outcome.engine,
+				fallback_reason: outcome.fallbackReason
 			});
-			message = audioOnly
-				? 'Audio processing completed successfully!'
-				: 'Compression completed successfully!';
 		} catch (error) {
 			console.error('Compression failed:', error);
+			const jobError = error instanceof CompressionJobError ? error : null;
 			trackEvent('compression_failed', {
 				...job,
 				resolution,
 				fps: metadata.fps,
-				reason: failureReason(error),
-				...engineReport()
+				reason: failureReason(jobError?.cause ?? error),
+				engine: jobError?.engine ?? 'ffmpeg',
+				fallback_reason: jobError?.fallbackReason ?? 'unknown'
 			});
 			errorMessage = 'Video compression failed. Please try again with different settings.';
-			message = 'Compression failed';
-			if (engineReport().engine === 'ffmpeg') {
-				await resetFFmpeg();
-			}
 		} finally {
 			isProcessing = false;
 			activeEngine = null;
@@ -416,81 +278,22 @@
 	const downloadVideo = (): void => {
 		if (!processedVideo) return;
 
-		console.log('Download button clicked, processedVideo size:', processedVideo.length);
-		console.log('Audio only mode:', audioOnlyMode, 'Mute sound:', muteSound);
-
-		// Always use video/mp4 as MIME type since we're outputting MP4 format
-		const blob = new Blob([new Uint8Array(processedVideo as Uint8Array)], { type: 'video/mp4' });
+		const blob = new Blob([new Uint8Array(processedVideo)], { type: 'video/mp4' });
 		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-
-		let filename = '';
-		if (audioOnlyMode) {
-			const audioStatus = muteSound ? 'no_audio' : 'with_audio';
-			filename = `${audioStatus}_${selectedFile?.name || 'video.mp4'}`;
-		} else {
-			filename = `compressed_${selectedTarget?.label?.replace(' ', '') || 'unknown'}_${selectedFile?.name || 'video.mp4'}`;
-		}
-
-		console.log('Generated filename:', filename);
-
-		a.download = filename;
-		a.href = url;
-		document.body.appendChild(a);
-		a.click();
+		const anchor = document.createElement('a');
+		anchor.download = outputFileName({
+			fileName: selectedFile?.name || 'video.mp4',
+			audioOnly: audioOnlyMode,
+			muteSound,
+			targetLabel: selectedTarget?.label || 'unknown'
+		});
+		anchor.href = url;
+		document.body.appendChild(anchor);
+		anchor.click();
 		trackEvent('video_downloaded', { mode: processingMode(), target: selectedTarget.label });
-		document.body.removeChild(a);
+		document.body.removeChild(anchor);
 		URL.revokeObjectURL(url);
 	};
-
-	const formatFileSize = (bytes: number): string => {
-		if (bytes === 0) return '0 Bytes';
-		const k = 1024;
-		const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-		const i = Math.floor(Math.log(bytes) / Math.log(k));
-		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-	};
-
-	const formatDuration = (seconds: number): string => {
-		const mins = Math.floor(seconds / 60);
-		const secs = Math.floor(seconds % 60);
-		return `${mins}:${secs.toString().padStart(2, '0')}`;
-	};
-
-	const formatTimeRemaining = (seconds: number): string => {
-		if (seconds < 60) return `${seconds}s`;
-		const mins = Math.floor(seconds / 60);
-		const secs = seconds % 60;
-		return `${mins}m ${secs}s`;
-	};
-
-	const compressionRatio = $derived(
-		compressedSize > 0 && originalSize > 0 ? (1 - compressedSize / originalSize) * 100 : 0
-	);
-
-	const currentTrim = $derived<TrimOptions>({
-		enabled: trimVideo,
-		skipFirstSeconds,
-		skipLastSeconds
-	});
-
-	const minimumSize = $derived(
-		videoMetadata
-			? minimumTargetSize(
-					effectiveDuration(videoMetadata.duration, currentTrim),
-					videoMetadata.hasMotion,
-					muteSound
-				)
-			: 0
-	);
-
-	const isTargetUnreachable = $derived(
-		!audioOnlyMode && !!selectedTarget && minimumSize > selectedTarget.value
-	);
-
-	const isFileSmallerThanTarget = $derived(
-		!!selectedTarget && originalSize > 0 && originalSize < selectedTarget.value
-	);
 
 	const handleTargetChange = (value: string | undefined): void => {
 		if (!value) return;
@@ -591,133 +394,21 @@
 							{selectedTargetValue || m.select_target_size()}
 						</Select.Trigger>
 						<Select.Content>
-							{#each compressionTargets as target}
+							{#each compressionTargets as target (target.label)}
 								<Select.Item value={target.label}>{target.label}</Select.Item>
 							{/each}
 						</Select.Content>
 					</Select.Root>
 				</div>
 
-				<!-- Advanced Settings Section -->
-				<div class="rounded-lg border">
-					<button
-						onclick={() => (showAdvancedSettings = !showAdvancedSettings)}
-						class="flex w-full items-center justify-between rounded-t-lg p-3 text-left transition-colors hover:bg-accent/50"
-					>
-						<div class="flex items-center gap-2">
-							<Settings class="h-4 w-4" />
-							<span class="text-sm font-medium">{m.advanced_settings()}</span>
-						</div>
-						<ChevronDown
-							class="h-4 w-4 transition-transform duration-200 {showAdvancedSettings
-								? 'rotate-180'
-								: ''}"
-						/>
-					</button>
-
-					<div
-						class="overflow-hidden transition-all duration-300 ease-in-out"
-						style="max-height: {showAdvancedSettings ? '350px' : '0px'};"
-					>
-						<div class="space-y-4 border-t p-3">
-							<div class="flex items-start space-x-3">
-								<input
-									type="checkbox"
-									id="audio-only-mode"
-									bind:checked={audioOnlyMode}
-									class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-								/>
-								<div class="grid gap-1">
-									<label
-										for="audio-only-mode"
-										class="cursor-pointer text-sm leading-none font-medium"
-									>
-										{m.audio_only_mode()}
-									</label>
-									<p class="text-xs text-muted-foreground">{m.audio_only_mode_description()}</p>
-								</div>
-							</div>
-
-							<div class="flex items-start space-x-3">
-								<input
-									type="checkbox"
-									id="mute-sound"
-									bind:checked={muteSound}
-									class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-								/>
-								<div class="grid gap-1">
-									<label for="mute-sound" class="cursor-pointer text-sm leading-none font-medium">
-										{m.mute_sound()}
-									</label>
-									<p class="text-xs text-muted-foreground">{m.mute_sound_description()}</p>
-								</div>
-							</div>
-
-							<div class="flex items-start space-x-3">
-								<input
-									type="checkbox"
-									id="preserve-original-fps"
-									bind:checked={preserveOriginalFps}
-									class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-								/>
-								<div class="grid gap-1">
-									<label
-										for="preserve-original-fps"
-										class="cursor-pointer text-sm leading-none font-medium"
-									>
-										{m.preserve_original_fps()}
-									</label>
-									<p class="text-xs text-muted-foreground">
-										{m.preserve_original_fps_description()}
-									</p>
-								</div>
-							</div>
-							<div class="flex flex-col space-y-3">
-								<div class="flex items-start space-x-3">
-									<input
-										type="checkbox"
-										id="trim-video"
-										bind:checked={trimVideo}
-										class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-									/>
-									<div class="grid gap-1">
-										<label for="trim-video" class="cursor-pointer text-sm leading-none font-medium">
-											{m.trim_video()}
-										</label>
-										<p class="text-xs text-muted-foreground">
-											{m.trim_video_description()}
-										</p>
-									</div>
-								</div>
-
-								{#if trimVideo}
-									<div class="grid grid-cols-2 gap-4 pl-7">
-										<div class="space-y-1.5">
-											<Label for="skip-first" class="text-xs">{m.skip_first_seconds()}</Label>
-											<Input
-												id="skip-first"
-												type="number"
-												min="0"
-												bind:value={skipFirstSeconds}
-												class="h-8 text-sm"
-											/>
-										</div>
-										<div class="space-y-1.5">
-											<Label for="skip-last" class="text-xs">{m.skip_last_seconds()}</Label>
-											<Input
-												id="skip-last"
-												type="number"
-												min="0"
-												bind:value={skipLastSeconds}
-												class="h-8 text-sm"
-											/>
-										</div>
-									</div>
-								{/if}
-							</div>
-						</div>
-					</div>
-				</div>
+				<AdvancedSettings
+					bind:audioOnlyMode
+					bind:muteSound
+					bind:preserveOriginalFps
+					bind:trimVideo
+					bind:skipFirstSeconds
+					bind:skipLastSeconds
+				/>
 
 				{#if isFileSmallerThanTarget}
 					<Alert.Root
@@ -782,57 +473,7 @@
 			</Card.Content>
 		</Card.Root>
 
-		<Card.Root>
-			<Card.Header>
-				<Card.Title>{audioOnlyMode ? m.audio_processing_results() : m.results()}</Card.Title>
-				<Card.Description>{m.results_description()}</Card.Description>
-			</Card.Header>
-			<Card.Content class="space-y-4">
-				{#if processedVideo}
-					<div class="space-y-3">
-						<div class="flex items-center justify-between">
-							<span class="text-sm font-medium">{m.original_size()}:</span>
-							<Badge variant="secondary">{formatFileSize(originalSize)}</Badge>
-						</div>
-
-						<div class="flex items-center justify-between">
-							<span class="text-sm font-medium">{m.compressed_size()}:</span>
-							<Badge variant={compressedSize <= selectedTarget.value ? 'default' : 'destructive'}>
-								{formatFileSize(compressedSize)}
-							</Badge>
-						</div>
-
-						<div class="flex items-center justify-between">
-							<span class="text-sm font-medium">{m.size_reduction()}:</span>
-							<Badge variant="outline">{compressionRatio.toFixed(1)}%</Badge>
-						</div>
-
-						<div class="flex items-center justify-between">
-							<span class="text-sm font-medium">{m.target_met()}:</span>
-							<Badge variant={compressedSize <= selectedTarget.value ? 'default' : 'destructive'}>
-								{compressedSize <= selectedTarget.value ? m.yes() : m.no()}
-							</Badge>
-						</div>
-
-						{#if compressedSize > selectedTarget.value}
-							<Alert.Root>
-								<Alert.Description>
-									{m.target_size_warning()}
-								</Alert.Description>
-							</Alert.Root>
-						{/if}
-
-						<Button onclick={downloadVideo} class="w-full">
-							{m.download_compressed()}
-						</Button>
-					</div>
-				{:else}
-					<div class="py-8 text-center text-muted-foreground">
-						{m.upload_compress_message()}
-					</div>
-				{/if}
-			</Card.Content>
-		</Card.Root>
+		<ResultsCard audioOnly={audioOnlyMode} {result} onDownload={downloadVideo} />
 	</div>
 
 	<Card.Root class="mt-6">

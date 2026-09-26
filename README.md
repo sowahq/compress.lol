@@ -1,7 +1,7 @@
 <h1 align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/header-dark.svg">
-    <img src=".github/assets/header-light.svg" alt="compress.lol" width="420">
+    <img src=".github/assets/header-light.svg" alt="compress.lol" width="440">
   </picture>
 </h1>
 

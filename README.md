@@ -1,11 +1,9 @@
-<p align="center">
+<h1 align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="static/brand/mark-dark.svg">
-    <img src="static/brand/mark-light.svg" alt="compress.lol logo" width="96" height="96">
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/header-dark.svg">
+    <img src=".github/assets/header-light.svg" alt="compress.lol" width="420">
   </picture>
-</p>
-
-# compress.lol
+</h1>
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![GitHub issues](https://img.shields.io/github/issues/sowahq/compress.lol)](https://github.com/sowahq/compress.lol/issues)

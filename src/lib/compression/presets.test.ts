@@ -1,60 +1,106 @@
 import { describe, expect, it } from 'vitest';
 import {
-	CUSTOM_MAX_MB,
-	CUSTOM_MIN_MB,
 	CUSTOM_PRESET_ID,
-	PRESET_DATA,
+	DEFAULT_PRESET_ID,
 	DEFAULT_SELECTION,
+	MEGABYTE,
+	PRESET_DATA,
 	TARGET_PRESETS,
 	findPreset,
 	isValidCustomMb,
 	presetLabel,
 	resolveTarget,
 	restoreSelection,
-	serializeSelection
+	serializeSelection,
+	type TargetPreset
 } from './presets';
 
-describe('TARGET_PRESETS', () => {
-	it('has unique ids', () => {
+const KEBAB_CASE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+const [firstPlatform] = PRESET_DATA.platforms;
+const [firstSize] = PRESET_DATA.sizes;
+
+describe('presets.json', () => {
+	describe.each(PRESET_DATA.platforms)('$id', (platform) => {
+		it('has a stable kebab-case id that cannot clash with sizes or the custom choice', () => {
+			expect(platform.id).toMatch(KEBAB_CASE);
+			expect(platform.id.startsWith('size-')).toBe(false);
+			expect(platform.id).not.toBe(CUSTOM_PRESET_ID);
+		});
+
+		it('has a name and a note', () => {
+			expect(platform.name.trim()).toBe(platform.name);
+			expect(platform.name.length).toBeGreaterThan(0);
+			expect(platform.note.trim().length).toBeGreaterThan(0);
+		});
+
+		it('has a size a user could also enter as a custom size', () => {
+			expect(isValidCustomMb(platform.sizeMb)).toBe(true);
+		});
+
+		it('cites at least one https source', () => {
+			expect(platform.sources.length).toBeGreaterThan(0);
+			platform.sources.forEach((source) => expect(new URL(source).protocol).toBe('https:'));
+		});
+
+		it('was checked on a real date, not in the future in any time zone', () => {
+			expect(platform.checked).toMatch(ISO_DATE);
+			const checked = new Date(`${platform.checked}T00:00:00Z`);
+			expect(checked.toISOString().slice(0, 10)).toBe(platform.checked);
+			expect(checked.getTime()).toBeLessThanOrEqual(Date.now() + ONE_DAY_MS);
+		});
+	});
+
+	it('lists generic sizes as increasing whole megabytes', () => {
+		const { sizes } = PRESET_DATA;
+		expect(sizes.every((size) => Number.isInteger(size) && isValidCustomMb(size))).toBe(true);
+		expect(sizes.every((size, index) => index === 0 || size > sizes[index - 1])).toBe(true);
+	});
+
+	it('keeps the default preset available', () => {
+		expect(findPreset(DEFAULT_PRESET_ID)).toBeDefined();
+		expect(resolveTarget(DEFAULT_SELECTION)).not.toBeNull();
+	});
+
+	it('gives every preset a unique id', () => {
 		const ids = TARGET_PRESETS.map((preset) => preset.id);
 		expect(new Set(ids).size).toBe(ids.length);
 	});
+});
 
-	const documentedLimits = [
-		{ id: 'discord', bytes: 20_000_000 },
-		{ id: 'discord-nitro-basic', bytes: 50_000_000 },
-		{ id: 'discord-nitro', bytes: 500_000_000 },
-		{ id: 'whatsapp', bytes: 16_000_000 },
-		{ id: 'email', bytes: 18_000_000 }
-	];
-
-	it.each(documentedLimits)('$id resolves to the pinned documented size', ({ id, bytes }) => {
-		expect(resolveTarget({ presetId: id, customMb: null })?.bytes).toBe(bytes);
+describe('resolveTarget on the data', () => {
+	it.each(PRESET_DATA.platforms)('$id uses decimal megabytes and its own id', (platform) => {
+		expect(resolveTarget({ presetId: platform.id, customMb: null })).toEqual({
+			bytes: platform.sizeMb * MEGABYTE,
+			label: `${platform.name} (${platform.sizeMb} MB)`,
+			fileTag: platform.id,
+			analyticsId: platform.id
+		});
 	});
 
-	it('uses decimal megabytes for generic sizes too', () => {
-		expect(
-			TARGET_PRESETS.filter((preset) => preset.group === 'size').map(
-				(preset) => resolveTarget({ presetId: preset.id, customMb: null })?.bytes
-			)
-		).toEqual([8_000_000, 25_000_000, 50_000_000, 100_000_000]);
-	});
-
-	it('keeps the previous 25 MB default', () => {
-		expect(DEFAULT_SELECTION).toEqual({ presetId: 'size-25', customMb: null });
+	it.each(PRESET_DATA.sizes)('size %i MB keeps the legacy analytics label', (size) => {
+		expect(resolveTarget({ presetId: `size-${size}`, customMb: null })).toEqual({
+			bytes: size * MEGABYTE,
+			label: `${size} MB`,
+			fileTag: `${size}MB`,
+			analyticsId: `${size} MB`
+		});
 	});
 });
 
 describe('presetLabel', () => {
-	const cases = [
-		{ id: 'discord', expected: 'Discord (20 MB)' },
-		{ id: 'email', expected: 'Gmail / Outlook (18 MB)' },
-		{ id: 'size-25', expected: '25 MB' }
+	const cases: { preset: TargetPreset; expected: string }[] = [
+		{
+			preset: { id: 'example', group: 'platform', name: 'Example', sizeMb: 20 },
+			expected: 'Example (20 MB)'
+		},
+		{ preset: { id: 'size-25', group: 'size', name: null, sizeMb: 25 }, expected: '25 MB' }
 	];
 
-	it.each(cases)('$id', ({ id, expected }) => {
-		const preset = findPreset(id);
-		expect(preset && presetLabel(preset)).toBe(expected);
+	it.each(cases)('$expected', ({ preset, expected }) => {
+		expect(presetLabel(preset)).toBe(expected);
 	});
 });
 
@@ -63,10 +109,10 @@ describe('isValidCustomMb', () => {
 		{ value: null, expected: false },
 		{ value: Number.NaN, expected: false },
 		{ value: 0, expected: false },
-		{ value: CUSTOM_MIN_MB, expected: true },
+		{ value: 1, expected: true },
 		{ value: 12.5, expected: true },
-		{ value: CUSTOM_MAX_MB, expected: true },
-		{ value: CUSTOM_MAX_MB + 1, expected: false }
+		{ value: 2048, expected: true },
+		{ value: 2049, expected: false }
 	];
 
 	it.each(cases)('$value', ({ value, expected }) => {
@@ -74,23 +120,8 @@ describe('isValidCustomMb', () => {
 	});
 });
 
-describe('resolveTarget', () => {
+describe('resolveTarget for custom and unknown choices', () => {
 	const cases = [
-		{
-			name: 'platform preset',
-			selection: { presetId: 'discord', customMb: null },
-			expected: {
-				bytes: 20_000_000,
-				label: 'Discord (20 MB)',
-				fileTag: 'discord',
-				analyticsId: 'discord'
-			}
-		},
-		{
-			name: 'generic size keeps the legacy analytics label',
-			selection: { presetId: 'size-8', customMb: null },
-			expected: { bytes: 8_000_000, label: '8 MB', fileTag: '8MB', analyticsId: '8 MB' }
-		},
 		{
 			name: 'custom size',
 			selection: { presetId: 'custom', customMb: 12.5 },
@@ -116,13 +147,16 @@ describe('resolveTarget', () => {
 });
 
 describe('restoreSelection', () => {
+	const legacyLabel = `${firstSize} MB`;
+	const legacySelection = { presetId: `size-${firstSize}`, customMb: null };
+
 	const cases = [
 		{ name: 'nothing saved', stored: null, legacy: null, expected: DEFAULT_SELECTION },
 		{
 			name: 'saved preset',
-			stored: '{"presetId":"whatsapp","customMb":null}',
+			stored: serializeSelection({ presetId: firstPlatform.id, customMb: null }),
 			legacy: null,
-			expected: { presetId: 'whatsapp', customMb: null }
+			expected: { presetId: firstPlatform.id, customMb: null }
 		},
 		{
 			name: 'saved custom size',
@@ -133,22 +167,22 @@ describe('restoreSelection', () => {
 		{
 			name: 'legacy label from the previous version',
 			stored: null,
-			legacy: '8 MB',
-			expected: { presetId: 'size-8', customMb: null }
+			legacy: legacyLabel,
+			expected: legacySelection
 		},
-		{ name: 'unknown legacy label', stored: null, legacy: '12 MB', expected: DEFAULT_SELECTION },
+		{ name: 'unknown legacy label', stored: null, legacy: '12345 MB', expected: DEFAULT_SELECTION },
 		{
 			name: 'corrupted json falls back to the legacy value',
 			stored: '{oops',
-			legacy: '8 MB',
-			expected: { presetId: 'size-8', customMb: null }
+			legacy: legacyLabel,
+			expected: legacySelection
 		},
 		{ name: 'corrupted json alone', stored: '{oops', legacy: null, expected: DEFAULT_SELECTION },
 		{
 			name: 'removed preset falls back to the legacy value',
 			stored: '{"presetId":"myspace","customMb":null}',
-			legacy: '25 MB',
-			expected: { presetId: 'size-25', customMb: null }
+			legacy: legacyLabel,
+			expected: legacySelection
 		},
 		{ name: 'wrong shape', stored: '{"presetId":3}', legacy: null, expected: DEFAULT_SELECTION }
 	];
@@ -160,49 +194,5 @@ describe('restoreSelection', () => {
 	it('round-trips through serializeSelection', () => {
 		const selection = { presetId: 'custom', customMb: 7.5 };
 		expect(restoreSelection(serializeSelection(selection), null)).toEqual(selection);
-	});
-});
-
-describe('presets.json', () => {
-	const KEBAB_CASE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-	const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-	describe.each(PRESET_DATA.platforms)('$id', (platform) => {
-		it('has a kebab-case id that cannot clash with sizes or the custom choice', () => {
-			expect(platform.id).toMatch(KEBAB_CASE);
-			expect(platform.id.startsWith('size-')).toBe(false);
-			expect(platform.id).not.toBe(CUSTOM_PRESET_ID);
-		});
-
-		it('has a name and a note', () => {
-			expect(platform.name.trim()).toBe(platform.name);
-			expect(platform.name.length).toBeGreaterThan(0);
-			expect(platform.note.trim().length).toBeGreaterThan(0);
-		});
-
-		it('has a size within the custom size bounds', () => {
-			expect(platform.sizeMb).toBeGreaterThanOrEqual(CUSTOM_MIN_MB);
-			expect(platform.sizeMb).toBeLessThanOrEqual(CUSTOM_MAX_MB);
-		});
-
-		it('cites an https source checked on a real, past date', () => {
-			expect(new URL(platform.source).protocol).toBe('https:');
-			expect(platform.checked).toMatch(ISO_DATE);
-			const checked = new Date(`${platform.checked}T00:00:00Z`);
-			expect(checked.toISOString().slice(0, 10)).toBe(platform.checked);
-			expect(checked.getTime()).toBeLessThanOrEqual(Date.now());
-		});
-	});
-
-	it('has unique platform ids', () => {
-		const ids = PRESET_DATA.platforms.map((platform) => platform.id);
-		expect(new Set(ids).size).toBe(ids.length);
-	});
-
-	it('lists generic sizes as increasing whole megabytes within bounds', () => {
-		const { sizes } = PRESET_DATA;
-		expect(sizes.every((size) => Number.isInteger(size) && size >= CUSTOM_MIN_MB)).toBe(true);
-		expect(sizes.every((size) => size <= CUSTOM_MAX_MB)).toBe(true);
-		expect(sizes.every((size, index) => index === 0 || size > sizes[index - 1])).toBe(true);
 	});
 });

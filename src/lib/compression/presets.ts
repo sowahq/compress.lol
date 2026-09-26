@@ -16,7 +16,7 @@ export interface PlatformPresetData {
 	name: string;
 	sizeMb: number;
 	note: string;
-	source: string;
+	sources: string[];
 	checked: string;
 }
 

@@ -32,6 +32,39 @@ export interface WebCodecsPlan {
 
 const KBPS = 1000;
 
+export const STALL_TIMEOUT_MS = 15_000;
+const STALL_CHECKS_PER_TIMEOUT = 5;
+
+export const withStallWatchdog = <T>(
+	task: (markProgress: () => void) => Promise<T>,
+	onStall: () => Promise<void>,
+	timeoutMs: number
+): Promise<T> =>
+	new Promise<T>((resolve, reject) => {
+		const stalledError = new WebCodecsUnsupportedError(['stalled']);
+		let lastProgressAt = Date.now();
+		let stalled = false;
+		const timer = setInterval(() => {
+			if (Date.now() - lastProgressAt < timeoutMs) return;
+			clearInterval(timer);
+			stalled = true;
+			onStall().finally(() => reject(stalledError));
+		}, timeoutMs / STALL_CHECKS_PER_TIMEOUT);
+
+		task(() => {
+			lastProgressAt = Date.now();
+		}).then(
+			(value) => {
+				clearInterval(timer);
+				if (!stalled) resolve(value);
+			},
+			(error: unknown) => {
+				clearInterval(timer);
+				reject(stalled ? stalledError : error);
+			}
+		);
+	});
+
 export const buildWebCodecsPlan = (
 	metadata: VideoMetadata,
 	options: Pick<WebCodecsEncodeOptions, 'targetSize' | 'preserveOriginalFps' | 'muteSound' | 'trim'>
@@ -147,13 +180,25 @@ export const encodeWithWebCodecs = async (
 			throw new WebCodecsUnsupportedError(reasons.length > 0 ? reasons : ['invalid_conversion']);
 		}
 
-		conversion.onProgress = (progress) => onProgress(Math.round(progress * 100));
-		await conversion.execute();
-
-		if (!target.buffer) {
-			throw new Error('WebCodecs conversion produced no output');
-		}
-		return new Uint8Array(target.buffer);
+		return await withStallWatchdog(
+			async (markProgress) => {
+				let processedTime = -1;
+				conversion.onProgress = (progress, time) => {
+					if (time > processedTime) {
+						processedTime = time;
+						markProgress();
+					}
+					onProgress(Math.round(progress * 100));
+				};
+				await conversion.execute();
+				if (!target.buffer) {
+					throw new Error('WebCodecs conversion produced no output');
+				}
+				return new Uint8Array(target.buffer);
+			},
+			() => conversion.cancel(),
+			STALL_TIMEOUT_MS
+		);
 	} finally {
 		input.dispose();
 	}

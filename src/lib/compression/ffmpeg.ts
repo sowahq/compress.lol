@@ -1,6 +1,7 @@
-import type { FFmpeg, FFFSType } from '@ffmpeg/ffmpeg';
+import type { FFmpeg, FFFSType, LogEvent } from '@ffmpeg/ffmpeg';
 import { toBlobURL } from '@ffmpeg/util';
 import { OUTPUT_FILE } from './args';
+import type { VideoProbe } from './settings';
 
 const FFMPEG_ASSETS_PATH = '/ffmpeg';
 
@@ -24,6 +25,7 @@ export const loadFFmpegCore = async (instance: Pick<FFmpeg, 'load'>): Promise<vo
 
 export type MountableFFmpeg = Pick<FFmpeg, 'createDir' | 'mount' | 'unmount' | 'deleteDir'>;
 export type RunnableFFmpeg = Pick<FFmpeg, 'exec' | 'readFile' | 'deleteFile'>;
+export type ProbingFFmpeg = MountableFFmpeg & Pick<FFmpeg, 'exec' | 'on' | 'off'>;
 
 export async function withMountedFile<T>(
 	instance: MountableFFmpeg,
@@ -68,4 +70,57 @@ export const toProgressPercent = (progress: number): number | null => {
 export const parseFpsFromLog = (line: string): number | null => {
 	const match = line.match(/,\s*(\d+\.?\d*)\s*fps/i) ?? line.match(/(\d+\.?\d*)\s*tbr/i);
 	return match ? Math.round(parseFloat(match[1])) : null;
+};
+
+const DURATION_PATTERN = /Duration: (\d+):(\d{2}):(\d{2}(?:\.\d+)?)/;
+const VIDEO_CODEC_PATTERN = /Video: (\w+)/;
+const DIMENSIONS_PATTERN = /, (\d{2,5})x(\d{2,5})/;
+const ROTATION_PATTERN = /rotation of (-?\d+(?:\.\d+)?) degrees/;
+const FALLBACK_FPS = 30;
+
+export const parseProbeLog = (lines: string[], size: number): VideoProbe | null => {
+	const durationMatch = lines.map((line) => line.match(DURATION_PATTERN)).find(Boolean);
+	const videoLine = lines.find((line) => VIDEO_CODEC_PATTERN.test(line));
+	const dimensions = videoLine?.match(DIMENSIONS_PATTERN);
+	if (!durationMatch || !videoLine || !dimensions) {
+		return null;
+	}
+
+	const [, hours, minutes, seconds] = durationMatch;
+	const duration = Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
+	const rotation = lines.map((line) => line.match(ROTATION_PATTERN)).find(Boolean);
+	const quarterTurn = rotation ? Math.abs(Math.round(Number(rotation[1]))) % 180 === 90 : false;
+	const [codedWidth, codedHeight] = [Number(dimensions[1]), Number(dimensions[2])];
+
+	if (duration <= 0) {
+		return null;
+	}
+
+	return {
+		duration,
+		width: quarterTurn ? codedHeight : codedWidth,
+		height: quarterTurn ? codedWidth : codedHeight,
+		codec: videoLine.match(VIDEO_CODEC_PATTERN)?.[1] ?? 'unknown',
+		fps: parseFpsFromLog(videoLine) ?? FALLBACK_FPS,
+		size
+	};
+};
+
+export const probeWithFFmpeg = async (
+	instance: ProbingFFmpeg,
+	file: File
+): Promise<VideoProbe | null> => {
+	const lines: string[] = [];
+	const collect = ({ message }: LogEvent): void => {
+		lines.push(message);
+	};
+	instance.on('log', collect);
+	try {
+		await withMountedFile(instance, file, `/probe_${Date.now()}`, (inputPath) =>
+			instance.exec(['-hide_banner', '-i', inputPath])
+		);
+	} finally {
+		instance.off('log', collect);
+	}
+	return parseProbeLog(lines, file.size);
 };

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OUTPUT_FILE } from './args';
 import {
 	parseFpsFromLog,
+	parseProbeLog,
 	runFFmpeg,
 	toProgressPercent,
 	withMountedFile,
@@ -189,5 +190,63 @@ describe('parseFpsFromLog', () => {
 
 	it.each(cases)('$name', ({ line, expected }) => {
 		expect(parseFpsFromLog(line)).toBe(expected);
+	});
+});
+
+describe('parseProbeLog', () => {
+	const SIZE = 34_222_708;
+	const aviLog = [
+		"Input #0, avi, from '/probe/mpeg4.avi':",
+		'  Duration: 00:00:15.00, start: 0.000000, bitrate: 18252 kb/s',
+		'  Stream #0:0: Video: mpeg4 (Simple Profile) (FMP4 / 0x34504D46), yuv420p, 1280x720 [SAR 1:1 DAR 16:9], 17502 kb/s, 30 fps, 30 tbr, 30 tbn',
+		'  Stream #0:1: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 48000 Hz, mono, s16, 768 kb/s',
+		'At least one output file must be specified'
+	];
+	const rotatedLog = [
+		'  Duration: 01:02:03.50, start: 0.000000, bitrate: 6010 kb/s',
+		'  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1920x1080 [SAR 1:1 DAR 16:9], 5931 kb/s, 29.97 fps, 29.97 tbr, 15360 tbn (default)',
+		'      displaymatrix: rotation of -90.00 degrees'
+	];
+
+	const cases = [
+		{
+			name: 'MPEG-4 Part 2 in AVI',
+			lines: aviLog,
+			expected: { duration: 15, width: 1280, height: 720, codec: 'mpeg4', fps: 30, size: SIZE }
+		},
+		{
+			name: 'quarter-turn rotation swaps the dimensions',
+			lines: rotatedLog,
+			expected: { duration: 3723.5, width: 1080, height: 1920, codec: 'h264', fps: 30, size: SIZE }
+		},
+		{
+			name: 'half-turn rotation keeps the dimensions',
+			lines: rotatedLog.map((line) => line.replace('-90.00', '180.00')),
+			expected: { width: 1920, height: 1080 }
+		},
+		{
+			name: 'missing fps falls back to 30',
+			lines: aviLog.map((line) => line.replace(', 30 fps, 30 tbr', '')),
+			expected: { fps: 30 }
+		}
+	];
+
+	it.each(cases)('$name', ({ lines, expected }) => {
+		expect(parseProbeLog(lines, SIZE)).toMatchObject(expected);
+	});
+
+	const invalid = [
+		{ name: 'no duration', lines: aviLog.filter((line) => !line.includes('Duration')) },
+		{ name: 'no video stream', lines: aviLog.filter((line) => !line.includes('Video:')) },
+		{ name: 'audio only file', lines: [aviLog[1], aviLog[3]] },
+		{
+			name: 'zero duration',
+			lines: aviLog.map((line) => line.replace('00:00:15.00', '00:00:00.00'))
+		},
+		{ name: 'empty log', lines: [] }
+	];
+
+	it.each(invalid)('returns null for $name', ({ lines }) => {
+		expect(parseProbeLog(lines, SIZE)).toBeNull();
 	});
 });

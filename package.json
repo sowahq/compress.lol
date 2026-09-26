@@ -13,8 +13,8 @@
 		"format": "prettier --write .",
 		"lint": "prettier --check .",
 		"test": "vitest run",
-		"preview:cloudflare": "npm run build && wrangler pages dev",
-		"deploy": "npm run build && wrangler pages deploy"
+		"preview:cloudflare": "npm run build && wrangler dev",
+		"deploy": "npm run build && wrangler deploy"
 	},
 	"devDependencies": {
 		"@inlang/paraglide-js": "^2.0.0",

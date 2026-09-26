@@ -9,7 +9,6 @@
 	import * as Alert from '$lib/components/ui/alert/index.js';
 	import Loader from '@lucide/svelte/icons/loader-circle';
 	import * as m from '$lib/paraglide/messages.js';
-	import LogoMark from '$lib/components/brand/logo-mark.svelte';
 	import LanguageSelector from '$lib/components/ui/selector/language-selector.svelte';
 	import ThemeSelector from '$lib/components/ui/selector/theme-selector.svelte';
 	import AdvancedSettings from '$lib/components/compression/advanced-settings.svelte';
@@ -331,11 +330,8 @@
 </svelte:head>
 
 <div class="container mx-auto max-w-4xl p-6">
-	<div class="mb-2 flex flex-wrap items-center justify-center gap-2">
-		<h1 class="mb-2 flex items-center gap-2 text-3xl font-bold sm:mr-4 sm:text-4xl">
-			<LogoMark class="size-8 shrink-0 sm:size-10" />
-			{m.app_title()}
-		</h1>
+	<div class="mb-2 flex items-center justify-center gap-2">
+		<h1 class="mr-4 mb-2 text-4xl font-bold">{m.app_title()}</h1>
 		<LanguageSelector />
 		<ThemeSelector />
 	</div>

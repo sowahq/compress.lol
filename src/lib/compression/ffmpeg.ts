@@ -1,5 +1,26 @@
 import type { FFmpeg, FFFSType } from '@ffmpeg/ffmpeg';
+import { toBlobURL } from '@ffmpeg/util';
 import { OUTPUT_FILE } from './args';
+
+const FFMPEG_ASSETS_PATH = '/ffmpeg';
+
+const MAX_FFMPEG_THREADS = 4;
+
+export const optimalThreadCount = (): number => {
+	if (globalThis.crossOriginIsolated !== true) {
+		return 1;
+	}
+	const cores = globalThis.navigator?.hardwareConcurrency || 2;
+	return Math.min(Math.max(1, cores - 1), MAX_FFMPEG_THREADS);
+};
+
+export const loadFFmpegCore = async (instance: Pick<FFmpeg, 'load'>): Promise<void> => {
+	await instance.load({
+		coreURL: await toBlobURL(`${FFMPEG_ASSETS_PATH}/ffmpeg-core.js`, 'text/javascript'),
+		wasmURL: await toBlobURL(`${FFMPEG_ASSETS_PATH}/ffmpeg-core.wasm`, 'application/wasm'),
+		workerURL: await toBlobURL(`${FFMPEG_ASSETS_PATH}/ffmpeg-core.worker.js`, 'text/javascript')
+	});
+};
 
 export type MountableFFmpeg = Pick<FFmpeg, 'createDir' | 'mount' | 'unmount' | 'deleteDir'>;
 export type RunnableFFmpeg = Pick<FFmpeg, 'exec' | 'readFile' | 'deleteFile'>;

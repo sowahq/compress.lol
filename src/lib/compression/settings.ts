@@ -77,6 +77,14 @@ const ladderStep = (videoKbps: number): (typeof LOW_BITRATE_LADDER)[number] =>
 	LOW_BITRATE_LADDER.find((step) => videoKbps >= step.minVideoKbps) ??
 	LOW_BITRATE_LADDER[LOW_BITRATE_LADDER.length - 1];
 
+export const estimateBitrateKbps = (size: number, duration: number): number =>
+	Math.round((size * 8) / duration / 1000);
+
+export const detectMotion = (bitrateKbps: number, width: number, height: number): boolean => {
+	const bitratePerPixel = (bitrateKbps / (width * height)) * 1000;
+	return bitratePerPixel > 0.1 || bitrateKbps > 3000;
+};
+
 export const calculateOptimalResolution = (
 	originalWidth: number,
 	originalHeight: number,

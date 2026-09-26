@@ -2,7 +2,6 @@
 	import { FFmpeg } from '@ffmpeg/ffmpeg';
 	// @ts-ignore
 	import type { LogEvent, ProgressEvent } from '@ffmpeg/ffmpeg/dist/esm/types';
-	import { toBlobURL } from '@ffmpeg/util';
 	import { onMount } from 'svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as Select from '$lib/components/ui/select/index.js';
@@ -18,7 +17,12 @@
 	import ThemeSelector from '$lib/components/ui/selector/theme-selector.svelte';
 	import Settings from '@lucide/svelte/icons/settings';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import { minimumTargetSize, type VideoMetadata } from '$lib/compression/settings';
+	import {
+		detectMotion,
+		estimateBitrateKbps,
+		minimumTargetSize,
+		type VideoMetadata
+	} from '$lib/compression/settings';
 	import {
 		buildAudioOnlyArgs,
 		buildCompressionArgs,
@@ -27,6 +31,8 @@
 	} from '$lib/compression/args';
 	import { encodeToTarget, MAX_ENCODE_ATTEMPTS } from '$lib/compression/target';
 	import {
+		loadFFmpegCore,
+		optimalThreadCount,
 		parseFpsFromLog,
 		runFFmpeg,
 		toProgressPercent,
@@ -71,19 +77,6 @@
 	let trimVideo = $state(false);
 	let skipFirstSeconds = $state(0);
 	let skipLastSeconds = $state(0);
-
-	const getOptimalThreadCount = (): number => {
-		try {
-			const cores = navigator.hardwareConcurrency || 2;
-			const isIsolated = (globalThis as any).crossOriginIsolated === true;
-			if (!isIsolated) return 1;
-			const baseline = Math.max(1, cores - 1);
-			const cap = 4;
-			return Math.min(baseline, cap);
-		} catch {
-			return 1;
-		}
-	};
 
 	const isChromiumByFeatures = (): boolean => {
 		try {
@@ -141,11 +134,7 @@
 				}
 			});
 
-			await ffmpeg.load({
-				coreURL: await toBlobURL(`ffmpeg/ffmpeg-core.js`, 'text/javascript'),
-				wasmURL: await toBlobURL(`ffmpeg/ffmpeg-core.wasm`, 'application/wasm'),
-				workerURL: await toBlobURL(`ffmpeg/ffmpeg-core.worker.js`, 'text/javascript')
-			});
+			await loadFFmpegCore(ffmpeg);
 
 			console.log('FFmpeg load completed!');
 			isLoaded = true;
@@ -249,10 +238,8 @@
 					else if (fileName.includes('vp9')) detectedCodec = 'vp9';
 					else if (fileName.includes('av1')) detectedCodec = 'av1';
 
-					const estimatedBitrate = Math.round((file.size * 8) / video.duration / 1000);
-					const pixelCount = video.videoWidth * video.videoHeight;
-					const bitratePerPixel = (estimatedBitrate / pixelCount) * 1000;
-					const hasMotion = bitratePerPixel > 0.1 || estimatedBitrate > 3000;
+					const estimatedBitrate = estimateBitrateKbps(file.size, video.duration);
+					const hasMotion = detectMotion(estimatedBitrate, video.videoWidth, video.videoHeight);
 
 					// Set initial metadata with default FPS (will be detected in background)
 					videoMetadata = {
@@ -357,7 +344,7 @@
 									targetSize: sizeBudget,
 									preserveOriginalFps: preserveFps,
 									muteSound: mute,
-									threadCount: isChromium ? getOptimalThreadCount() : 1,
+									threadCount: isChromium ? optimalThreadCount() : 1,
 									trim
 								})
 							);

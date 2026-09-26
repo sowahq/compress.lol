@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
 	calculateCompressionSettings,
 	calculateOptimalResolution,
+	detectMotion,
+	estimateBitrateKbps,
 	fitWithinLongestEdge,
 	MAX_ENCODE_EDGE,
 	MIN_AUDIO_BITRATE_KBPS,
@@ -225,5 +227,28 @@ describe('minimumTargetSize', () => {
 
 	it('accepts a two-minute video at 8 MB', () => {
 		expect(minimumTargetSize(120, true, false)).toBeLessThan(8 * MB);
+	});
+});
+
+describe('estimateBitrateKbps', () => {
+	const cases = [
+		{ size: 10 * MB, duration: 10, expected: 8389 },
+		{ size: 1000, duration: 8, expected: 1 }
+	];
+
+	it.each(cases)('$size bytes over $duration s', ({ size, duration, expected }) => {
+		expect(estimateBitrateKbps(size, duration)).toBe(expected);
+	});
+});
+
+describe('detectMotion', () => {
+	const cases = [
+		{ name: 'high bitrate', bitrate: 3500, width: 3840, height: 2160, expected: true },
+		{ name: 'dense bitrate per pixel', bitrate: 200, width: 640, height: 360, expected: true },
+		{ name: 'sparse 1080p', bitrate: 150, width: 1920, height: 1080, expected: false }
+	];
+
+	it.each(cases)('$name', ({ bitrate, width, height, expected }) => {
+		expect(detectMotion(bitrate, width, height)).toBe(expected);
 	});
 });

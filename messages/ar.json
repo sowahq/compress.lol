@@ -55,5 +55,9 @@
 	"processing_audio": "جار معالجة الصوت...",
 	"audio_processing_results": "نتائج معالجة الصوت",
 	"preserve_original_fps": "الحفاظ على معدل الإطارات الأصلي",
-	"preserve_original_fps_description": "احتفظ بمعدل إطارات الفيديو الأصلي بدلاً من تقليله لتقليل حجم الملف"
+	"preserve_original_fps_description": "احتفظ بمعدل إطارات الفيديو الأصلي بدلاً من تقليله لتقليل حجم الملف",
+	"trim_video": "قص الفيديو",
+	"trim_video_description": "إزالة عدد محدد من الثواني من بداية الفيديو و/أو نهايته",
+	"skip_first_seconds": "تخطي البداية (ثوانٍ)",
+	"skip_last_seconds": "تخطي النهاية (ثوانٍ)"
 }

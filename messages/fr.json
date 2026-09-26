@@ -55,5 +55,9 @@
 	"processing_audio": "Traitement audio en cours...",
 	"audio_processing_results": "Résultats du traitement audio",
 	"preserve_original_fps": "Conserver le FPS d'origine",
-	"preserve_original_fps_description": "Conserver la fréquence d'images d'origine de la vidéo au lieu de la réduire pour obtenir des fichiers plus petits"
+	"preserve_original_fps_description": "Conserver la fréquence d'images d'origine de la vidéo au lieu de la réduire pour obtenir des fichiers plus petits",
+	"trim_video": "Couper la vidéo",
+	"trim_video_description": "Retirer un nombre de secondes au début et/ou à la fin de la vidéo",
+	"skip_first_seconds": "Ignorer le début (secondes)",
+	"skip_last_seconds": "Ignorer la fin (secondes)"
 }

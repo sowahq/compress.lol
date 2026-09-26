@@ -55,5 +55,9 @@
 	"processing_audio": "Przetwarzanie dźwięku...",
 	"audio_processing_results": "Wyniki przetwarzania dźwięku",
 	"preserve_original_fps": "Zachowaj oryginalny FPS",
-	"preserve_original_fps_description": "Zachowaj oryginalną liczbę klatek na sekundę wideo zamiast zmniejszać ją w celu uzyskania mniejszych plików"
+	"preserve_original_fps_description": "Zachowaj oryginalną liczbę klatek na sekundę wideo zamiast zmniejszać ją w celu uzyskania mniejszych plików",
+	"trim_video": "Przytnij film",
+	"trim_video_description": "Usuń podaną liczbę sekund z początku i/lub końca filmu",
+	"skip_first_seconds": "Pomiń początek (sekundy)",
+	"skip_last_seconds": "Pomiń koniec (sekundy)"
 }

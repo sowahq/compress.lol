@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OUTPUT_FILE } from './args';
 import {
+	fetchVerifiedBlobURL,
 	parseFpsFromLog,
 	parseProbeLog,
 	runFFmpeg,
@@ -248,5 +249,50 @@ describe('parseProbeLog', () => {
 
 	it.each(invalid)('returns null for $name', ({ lines }) => {
 		expect(parseProbeLog(lines, SIZE)).toBeNull();
+	});
+});
+
+describe('fetchVerifiedBlobURL', () => {
+	const bytes = new TextEncoder().encode('ffmpeg core');
+	const SHA256 = 'c8d8f2c0bd6f2aeb4d2f1b0c0c9f2a4f67f3d2ba0e3a0c2a8e0e2f1b6d1c3a41';
+	const asset = { file: 'ffmpeg-core.js', mimeType: 'text/javascript', sha256: SHA256 };
+
+	const fetcherReturning = (response: Response) =>
+		vi.fn<typeof fetch>(async () => response.clone());
+
+	it('returns a blob URL when the digest matches', async () => {
+		const digest = Array.from(
+			new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
+			(byte) => byte.toString(16).padStart(2, '0')
+		).join('');
+		const fetcher = fetcherReturning(new Response(bytes));
+
+		const url = await fetchVerifiedBlobURL(
+			'https://cdn.example/core',
+			{ ...asset, sha256: digest },
+			fetcher
+		);
+
+		expect(url).toMatch(/^blob:/);
+		expect(fetcher).toHaveBeenCalledWith('https://cdn.example/core/ffmpeg-core.js');
+		const blob = await (await fetch(url)).text();
+		expect(blob).toBe('ffmpeg core');
+		URL.revokeObjectURL(url);
+	});
+
+	it('rejects tampered content', async () => {
+		const fetcher = fetcherReturning(new Response(new TextEncoder().encode('tampered')));
+
+		await expect(fetchVerifiedBlobURL('https://cdn.example/core', asset, fetcher)).rejects.toThrow(
+			'Integrity check failed for https://cdn.example/core/ffmpeg-core.js'
+		);
+	});
+
+	it('rejects HTTP errors', async () => {
+		const fetcher = fetcherReturning(new Response('missing', { status: 404 }));
+
+		await expect(fetchVerifiedBlobURL('https://cdn.example/core', asset, fetcher)).rejects.toThrow(
+			'HTTP 404'
+		);
 	});
 });

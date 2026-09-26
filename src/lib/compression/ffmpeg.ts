@@ -1,9 +1,53 @@
 import type { FFmpeg, FFFSType, LogEvent } from '@ffmpeg/ffmpeg';
-import { toBlobURL } from '@ffmpeg/util';
 import { OUTPUT_FILE } from './args';
 import type { VideoProbe } from './settings';
 
-const FFMPEG_ASSETS_PATH = '/ffmpeg';
+export const FFMPEG_CORE_BASE_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/esm';
+
+export interface VerifiedAsset {
+	file: string;
+	mimeType: string;
+	sha256: string;
+}
+
+export const FFMPEG_CORE_ASSETS = {
+	core: {
+		file: 'ffmpeg-core.js',
+		mimeType: 'text/javascript',
+		sha256: '270a2e6ff945e173238610669a3f7132df5f9c52698a9bf708cf5c2ab6bda0de'
+	},
+	wasm: {
+		file: 'ffmpeg-core.wasm',
+		mimeType: 'application/wasm',
+		sha256: 'be2c97605366b78f3f13e21b52e81a55a79e1f29c133b03a68ec187b1a2ec41a'
+	},
+	worker: {
+		file: 'ffmpeg-core.worker.js',
+		mimeType: 'text/javascript',
+		sha256: 'f77898d631dc010b45c29c23cb4379c611a7d7b131bf591d08a656bb729a4ca3'
+	}
+} as const satisfies Record<string, VerifiedAsset>;
+
+const toHex = (buffer: ArrayBuffer): string =>
+	Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, '0')).join('');
+
+export const fetchVerifiedBlobURL = async (
+	baseUrl: string,
+	{ file, mimeType, sha256 }: VerifiedAsset,
+	fetcher: typeof fetch = fetch
+): Promise<string> => {
+	const url = `${baseUrl}/${file}`;
+	const response = await fetcher(url);
+	if (!response.ok) {
+		throw new Error(`Failed to fetch ${url}: HTTP ${response.status}`);
+	}
+	const bytes = await response.arrayBuffer();
+	const digest = toHex(await crypto.subtle.digest('SHA-256', bytes));
+	if (digest !== sha256) {
+		throw new Error(`Integrity check failed for ${url}`);
+	}
+	return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+};
 
 const MAX_FFMPEG_THREADS = 4;
 
@@ -16,11 +60,12 @@ export const optimalThreadCount = (): number => {
 };
 
 export const loadFFmpegCore = async (instance: Pick<FFmpeg, 'load'>): Promise<void> => {
-	await instance.load({
-		coreURL: await toBlobURL(`${FFMPEG_ASSETS_PATH}/ffmpeg-core.js`, 'text/javascript'),
-		wasmURL: await toBlobURL(`${FFMPEG_ASSETS_PATH}/ffmpeg-core.wasm`, 'application/wasm'),
-		workerURL: await toBlobURL(`${FFMPEG_ASSETS_PATH}/ffmpeg-core.worker.js`, 'text/javascript')
-	});
+	const [coreURL, wasmURL, workerURL] = await Promise.all(
+		[FFMPEG_CORE_ASSETS.core, FFMPEG_CORE_ASSETS.wasm, FFMPEG_CORE_ASSETS.worker].map((asset) =>
+			fetchVerifiedBlobURL(FFMPEG_CORE_BASE_URL, asset)
+		)
+	);
+	await instance.load({ coreURL, wasmURL, workerURL });
 };
 
 export type MountableFFmpeg = Pick<FFmpeg, 'createDir' | 'mount' | 'unmount' | 'deleteDir'>;

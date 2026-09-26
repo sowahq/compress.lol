@@ -34,6 +34,8 @@ export type AnalyticsEvents = {
 	compression_succeeded: JobData & {
 		seconds: number;
 		reduction_percent: number;
+		target_met: boolean;
+		attempts: number;
 	};
 	compression_failed: JobData & {
 		resolution: string;

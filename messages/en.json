@@ -29,6 +29,7 @@
 	"download_compressed": "Download Compressed Video",
 	"upload_compress_message": "Upload and compress a video to see results here",
 	"target_size_warning": "The compressed video is larger than the target size. Try selecting a smaller target or consider a shorter video.",
+	"target_unreachable_error": "This video is too long for the selected target: it needs at least {minimum}. Choose a larger target, trim the video or mute the sound.",
 	"small_video_warning": "The original file is already smaller than the selected target. Compression may increase its size. Choose a smaller target or keep the original file.",
 	"how_it_works": "How it works",
 	"how_target_size": "Choose your target size - We'll compress your video to fit perfectly!",

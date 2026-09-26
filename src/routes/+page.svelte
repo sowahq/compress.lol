@@ -18,12 +18,14 @@
 	import ThemeSelector from '$lib/components/ui/selector/theme-selector.svelte';
 	import Settings from '@lucide/svelte/icons/settings';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import type { VideoMetadata } from '$lib/compression/settings';
+	import { minimumTargetSize, type VideoMetadata } from '$lib/compression/settings';
 	import {
 		buildAudioOnlyArgs,
 		buildCompressionArgs,
+		effectiveDuration,
 		type TrimOptions
 	} from '$lib/compression/args';
+	import { encodeToTarget, MAX_ENCODE_ATTEMPTS } from '$lib/compression/target';
 	import {
 		parseFpsFromLog,
 		runFFmpeg,
@@ -51,6 +53,7 @@
 	let isLoaded = $state(false);
 	let isProcessing = $state(false);
 	let progress = $state(0);
+	let encodeAttempt = $state(0);
 	let selectedFile = $state<File | null>(null);
 	let processedVideo = $state<Uint8Array | null>(null);
 	let originalSize = $state(0);
@@ -292,16 +295,20 @@
 	};
 
 	const compressVideo = async (): Promise<void> => {
-		if (!selectedFile || !isLoaded || !videoMetadata || !ffmpeg) return;
+		if (!selectedFile || !isLoaded || !videoMetadata || !ffmpeg || isTargetUnreachable) return;
 
 		isProcessing = true;
 		progress = 0;
+		encodeAttempt = 0;
 		errorMessage = '';
 		startTime = Date.now();
+		const jobStartTime = startTime;
 		estimatedTimeRemaining = 0;
 
 		const instance = ffmpeg;
+		const file = selectedFile;
 		const metadata = videoMetadata;
+		const trim = currentTrim;
 		const job = { mode: processingMode(), target: selectedTarget.label, browser: browserFamily() };
 		const resolution = resolutionTier(metadata.resolution);
 
@@ -314,30 +321,52 @@
 			trim: trimVideo
 		});
 
-		try {
+		const encodeWith = (buildArgs: (inputPath: string) => string[]): Promise<Uint8Array> => {
 			message = 'Mounting input file...';
-			const trim: TrimOptions = { enabled: trimVideo, skipFirstSeconds, skipLastSeconds };
-			const data = await withMountedFile(instance, selectedFile, '/input', (inputPath) => {
-				const args = audioOnlyMode
-					? buildAudioOnlyArgs(inputPath, metadata.duration, trim, muteSound)
-					: buildCompressionArgs(inputPath, metadata, {
-							targetSize: selectedTarget.value,
-							preserveOriginalFps,
-							muteSound,
-							threadCount: isChromium ? getOptimalThreadCount() : 1,
-							trim
-						});
+			return withMountedFile(instance, file, '/input', (inputPath) => {
+				const args = buildArgs(inputPath);
 				message = audioOnlyMode ? 'Processing audio only...' : 'Starting compression...';
 				console.log('FFmpeg args:', args);
 				return runFFmpeg(instance, args);
 			});
+		};
+
+		try {
+			const { data, attempts } = audioOnlyMode
+				? {
+						data: await encodeWith((inputPath) =>
+							buildAudioOnlyArgs(inputPath, metadata.duration, trim, muteSound)
+						),
+						attempts: 1
+					}
+				: await encodeToTarget({
+						targetSize: selectedTarget.value,
+						minimumBudget: minimumSize,
+						encode: (sizeBudget, attempt) => {
+							encodeAttempt = attempt;
+							progress = 0;
+							startTime = Date.now();
+							estimatedTimeRemaining = 0;
+							return encodeWith((inputPath) =>
+								buildCompressionArgs(inputPath, metadata, {
+									targetSize: sizeBudget,
+									preserveOriginalFps,
+									muteSound,
+									threadCount: isChromium ? getOptimalThreadCount() : 1,
+									trim
+								})
+							);
+						}
+					});
 
 			processedVideo = data;
 			compressedSize = data.length;
 			trackEvent('compression_succeeded', {
 				...job,
-				seconds: Math.round((Date.now() - startTime) / 1000),
-				reduction_percent: Math.round((1 - data.length / metadata.size) * 100)
+				seconds: Math.round((Date.now() - jobStartTime) / 1000),
+				reduction_percent: Math.round((1 - data.length / metadata.size) * 100),
+				target_met: data.length <= selectedTarget.value,
+				attempts
 			});
 			message = audioOnlyMode
 				? 'Audio processing completed successfully!'
@@ -356,6 +385,7 @@
 		} finally {
 			isProcessing = false;
 			progress = 0;
+			encodeAttempt = 0;
 			startTime = 0;
 			estimatedTimeRemaining = 0;
 		}
@@ -414,6 +444,26 @@
 
 	const compressionRatio = $derived(
 		compressedSize > 0 && originalSize > 0 ? (1 - compressedSize / originalSize) * 100 : 0
+	);
+
+	const currentTrim = $derived<TrimOptions>({
+		enabled: trimVideo,
+		skipFirstSeconds,
+		skipLastSeconds
+	});
+
+	const minimumSize = $derived(
+		videoMetadata
+			? minimumTargetSize(
+					effectiveDuration(videoMetadata.duration, currentTrim),
+					videoMetadata.hasMotion,
+					muteSound
+				)
+			: 0
+	);
+
+	const isTargetUnreachable = $derived(
+		!audioOnlyMode && !!selectedTarget && minimumSize > selectedTarget.value
 	);
 
 	const isFileSmallerThanTarget = $derived(
@@ -655,6 +705,14 @@
 					</Alert.Root>
 				{/if}
 
+				{#if isTargetUnreachable}
+					<Alert.Root class="border-destructive">
+						<Alert.Description>
+							{m.target_unreachable_error({ minimum: formatFileSize(minimumSize) })}
+						</Alert.Description>
+					</Alert.Root>
+				{/if}
+
 				{#if isChromium}
 					<Alert.Root class="mt-2">
 						<Alert.Description>
@@ -665,7 +723,7 @@
 
 				<Button
 					onclick={compressVideo}
-					disabled={!selectedFile || !isLoaded || isProcessing}
+					disabled={!selectedFile || !isLoaded || isProcessing || isTargetUnreachable}
 					class="w-full"
 				>
 					{#if isProcessing}
@@ -678,7 +736,12 @@
 				{#if isProcessing && progress > 0}
 					<div class="space-y-2">
 						<div class="flex justify-between text-sm">
-							<span>{m.progress()}</span>
+							<span>
+								{m.progress()}
+								{#if encodeAttempt > 1}
+									({encodeAttempt}/{MAX_ENCODE_ATTEMPTS})
+								{/if}
+							</span>
 							<div class="flex items-center gap-2">
 								<span>{progress}%</span>
 								{#if estimatedTimeRemaining > 0}

@@ -1,3 +1,5 @@
+import { MEGABYTE } from './presets';
+
 export const MAX_ENCODE_EDGE = 1920;
 export const MIN_VIDEO_BITRATE_KBPS = 64;
 export const MIN_AUDIO_BITRATE_KBPS = 24;
@@ -147,15 +149,15 @@ export const calculateCompressionSettings = (
 	let targetFps = metadata.fps;
 	let fpsCap = metadata.fps;
 
-	if (targetSize <= 8 * 1024 * 1024) {
+	if (targetSize <= 8 * MEGABYTE) {
 		tierEdge = metadata.hasMotion ? 1024 : 854;
 		crf = metadata.hasMotion ? 18 : 26;
 		fpsCap = 24;
-	} else if (targetSize <= 25 * 1024 * 1024) {
+	} else if (targetSize <= 25 * MEGABYTE) {
 		tierEdge = metadata.hasMotion ? 1440 : 1280;
 		crf = metadata.hasMotion ? 16 : 24;
 		fpsCap = 30;
-	} else if (targetSize <= 50 * 1024 * 1024) {
+	} else if (targetSize <= 50 * MEGABYTE) {
 		crf = metadata.hasMotion ? 14 : 22;
 		fpsCap = 30;
 	} else {

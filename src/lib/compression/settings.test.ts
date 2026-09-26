@@ -13,8 +13,9 @@ import {
 	type CompressionSettings,
 	type VideoMetadata
 } from './settings';
+import { MEGABYTE } from './presets';
 
-const MB = 1024 * 1024;
+const MB = MEGABYTE;
 
 const video = (overrides: Partial<VideoMetadata>): VideoMetadata => ({
 	duration: 30,
@@ -75,9 +76,9 @@ describe('calculateCompressionSettings', () => {
 				resolution: '1920x1080',
 				crf: 12,
 				targetFps: 30,
-				videoBitrate: '22242k',
+				videoBitrate: '21205k',
 				audioBitrate: '128k',
-				bufferSize: '66726k'
+				bufferSize: '63615k'
 			}
 		},
 		{
@@ -85,21 +86,21 @@ describe('calculateCompressionSettings', () => {
 			targetSize: 50 * MB,
 			metadata: video({}),
 			preserveOriginalFps: false,
-			expected: { resolution: '1920x1080', crf: 14, targetFps: 30, videoBitrate: '11057k' }
+			expected: { resolution: '1920x1080', crf: 14, targetFps: 30, videoBitrate: '10539k' }
 		},
 		{
 			name: '4K60 to 25 MB uses the 1440 px tier',
 			targetSize: 25 * MB,
 			metadata: video({}),
 			preserveOriginalFps: false,
-			expected: { resolution: '1440x810', crf: 16, targetFps: 30, videoBitrate: '5464k' }
+			expected: { resolution: '1440x810', crf: 16, targetFps: 30, videoBitrate: '5205k' }
 		},
 		{
 			name: '4K60 to 8 MB uses the 1024 px tier and 24 fps',
 			targetSize: 8 * MB,
 			metadata: video({}),
 			preserveOriginalFps: false,
-			expected: { resolution: '1024x576', crf: 18, targetFps: 24, videoBitrate: '1662k' }
+			expected: { resolution: '1024x576', crf: 18, targetFps: 24, videoBitrate: '1579k' }
 		},
 		{
 			name: 'preserving the original FPS keeps 60 fps',
@@ -137,6 +138,13 @@ describe('calculateCompressionSettings', () => {
 			expected: { resolution: '810x1440' }
 		},
 		{
+			name: 'a custom 26 MB target uses the 50 MB tier',
+			targetSize: 26 * MB,
+			metadata: video({}),
+			preserveOriginalFps: false,
+			expected: { resolution: '1920x1080', crf: 14 }
+		},
+		{
 			name: 'an extremely tall video keeps a short side of at least 2 px',
 			targetSize: 8 * MB,
 			metadata: video({ resolution: '4x3840', hasMotion: false }),
@@ -162,14 +170,14 @@ describe('calculateCompressionSettings', () => {
 			targetSize: 8 * MB,
 			metadata: video({ duration: 120, resolution: '1920x1080' }),
 			preserveOriginalFps: false,
-			expected: { resolution: '640x360', targetFps: 24, videoBitrate: '393k', audioBitrate: '54k' }
+			expected: { resolution: '640x360', targetFps: 24, videoBitrate: '376k', audioBitrate: '51k' }
 		},
 		{
 			name: 'very long video to 8 MB drops to 426 px and 15 fps',
 			targetSize: 8 * MB,
 			metadata: video({ duration: 600, resolution: '1920x1080' }),
 			preserveOriginalFps: false,
-			expected: { resolution: '426x240', targetFps: 15, videoBitrate: '65k', audioBitrate: '24k' }
+			expected: { resolution: '426x240', targetFps: 15, videoBitrate: '64k', audioBitrate: '24k' }
 		},
 		{
 			name: 'low bitrate ladder respects preserved FPS',
@@ -246,7 +254,7 @@ describe('minimumTargetSize', () => {
 
 describe('estimateBitrateKbps', () => {
 	const cases = [
-		{ size: 10 * MB, duration: 10, expected: 8389 },
+		{ size: 10 * MB, duration: 10, expected: 8000 },
 		{ size: 1000, duration: 8, expected: 1 }
 	];
 
@@ -280,7 +288,7 @@ describe('buildVideoMetadata', () => {
 			})
 		).toEqual({
 			duration: 10,
-			bitrate: 8389,
+			bitrate: 8000,
 			resolution: '3840x2160',
 			codec: 'hevc',
 			size: 10 * MB,

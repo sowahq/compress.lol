@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  verify-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      CAN_DEPLOY: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Type check
+        run: npm run check
+
+      - name: Formatting
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload preview version
+        id: preview
+        if: github.event_name == 'pull_request' && env.CAN_DEPLOY == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.COMPRESS_LOL_CF_API_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          npx wrangler versions upload --preview-alias "pr-$PR_NUMBER" --message "PR #$PR_NUMBER $HEAD_SHA" | tee wrangler-output.txt
+          url=$(grep -oE "https://pr-$PR_NUMBER-[a-z0-9-]+\.[a-z0-9-]+\.workers\.dev" wrangler-output.txt | head -1)
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Comment preview URL
+        if: steps.preview.outputs.url
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+        run: |
+          gh pr comment "$PR_NUMBER" --edit-last --create-if-none \
+            --body "Preview: $PREVIEW_URL (commit $HEAD_SHA)"
+
+      - name: Deploy to production
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.COMPRESS_LOL_CF_API_TOKEN }}
+        run: npx wrangler deploy --message "main ${{ github.sha }}"

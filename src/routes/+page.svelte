@@ -71,7 +71,6 @@
 	let message = $state('Initializing...');
 	let startTime = $state<number>(0);
 	let estimatedTimeRemaining = $state<number>(0);
-	let isChromium = $state(false);
 	let showAdvancedSettings = $state(false);
 	let muteSound = $state(false);
 	let audioOnlyMode = $state(false);
@@ -106,7 +105,6 @@
 				handleTargetChange(savedTarget);
 			}
 		} catch (e) {}
-		isChromium = isChromiumByFeatures();
 	});
 
 	const updateProgress = (percent: number): void => {
@@ -345,7 +343,7 @@
 						encodeWithFFmpeg((inputPath) =>
 							buildCompressionArgs(inputPath, metadata, {
 								...encodeOptions(sizeBudget),
-								threadCount: isChromium ? optimalThreadCount() : 1
+								threadCount: isChromiumByFeatures() ? optimalThreadCount() : 1
 							})
 						),
 					onFallback: (reason) => {

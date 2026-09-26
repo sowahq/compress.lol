@@ -330,10 +330,12 @@
 </svelte:head>
 
 <div class="container mx-auto max-w-4xl p-6">
-	<div class="mb-2 flex items-center justify-center gap-2">
-		<h1 class="mr-4 mb-2 text-4xl font-bold">{m.app_title()}</h1>
-		<LanguageSelector />
-		<ThemeSelector />
+	<div class="mb-2 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+		<h1 class="mb-2 text-4xl font-bold">{m.app_title()}</h1>
+		<div class="flex items-center gap-2">
+			<LanguageSelector />
+			<ThemeSelector />
+		</div>
 	</div>
 	<div class="mb-8 text-center">
 		<p class="text-muted-foreground">{m.app_subtitle()}</p>

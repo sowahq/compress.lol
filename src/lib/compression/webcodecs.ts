@@ -35,25 +35,34 @@ const KBPS = 1000;
 export const STALL_TIMEOUT_MS = 15_000;
 const STALL_CHECKS_PER_TIMEOUT = 5;
 
+export type StallCancel = () => Promise<void>;
+
 export const withStallWatchdog = <T>(
-	task: (markProgress: () => void) => Promise<T>,
-	onStall: () => Promise<void>,
+	task: (markProgress: () => void, registerCancel: (cancel: StallCancel) => void) => Promise<T>,
 	timeoutMs: number
 ): Promise<T> =>
 	new Promise<T>((resolve, reject) => {
 		const stalledError = new WebCodecsUnsupportedError(['stalled']);
 		let lastProgressAt = Date.now();
 		let stalled = false;
+		let cancel: StallCancel = async () => undefined;
 		const timer = setInterval(() => {
 			if (Date.now() - lastProgressAt < timeoutMs) return;
 			clearInterval(timer);
 			stalled = true;
-			onStall().finally(() => reject(stalledError));
+			cancel()
+				.catch((error: unknown) => console.warn('Failed to cancel stalled encode:', error))
+				.then(() => reject(stalledError));
 		}, timeoutMs / STALL_CHECKS_PER_TIMEOUT);
 
-		task(() => {
-			lastProgressAt = Date.now();
-		}).then(
+		task(
+			() => {
+				lastProgressAt = Date.now();
+			},
+			(registered) => {
+				cancel = registered;
+			}
+		).then(
 			(value) => {
 				clearInterval(timer);
 				if (!stalled) resolve(value);
@@ -146,56 +155,52 @@ export const encodeWithWebCodecs = async (
 	});
 
 	try {
-		const conversion = await Conversion.init({
-			input,
-			output,
-			tracks: 'primary',
-			showWarnings: false,
-			trim: { start: plan.trimStart, end: plan.trimEnd },
-			video: {
-				codec: 'avc',
-				width: plan.width,
-				height: plan.height,
-				fit: 'fill',
-				frameRate: plan.frameRate,
-				quality: new Quality({ bitrate: plan.videoBitrate, bitrateMode: options.bitrateMode }),
-				forceTranscode: true
-			},
-			audio: options.muteSound
-				? { discard: true }
-				: {
-						codec: 'aac',
-						numberOfChannels: 2,
-						sampleRate: 48000,
-						quality: new Quality({ bitrate: plan.audioBitrate }),
-						forceTranscode: true
-					}
-		});
+		return await withStallWatchdog(async (markProgress, registerCancel) => {
+			const passThrough = <T>(sample: T): T => {
+				markProgress();
+				return sample;
+			};
+			const conversion = await Conversion.init({
+				input,
+				output,
+				tracks: 'primary',
+				showWarnings: false,
+				trim: { start: plan.trimStart, end: plan.trimEnd },
+				video: {
+					codec: 'avc',
+					width: plan.width,
+					height: plan.height,
+					fit: 'fill',
+					frameRate: plan.frameRate,
+					quality: new Quality({ bitrate: plan.videoBitrate, bitrateMode: options.bitrateMode }),
+					forceTranscode: true,
+					process: passThrough
+				},
+				audio: options.muteSound
+					? { discard: true }
+					: {
+							codec: 'aac',
+							numberOfChannels: 2,
+							sampleRate: 48000,
+							quality: new Quality({ bitrate: plan.audioBitrate }),
+							forceTranscode: true,
+							process: passThrough
+						}
+			});
 
-		const reasons = blockingReasons(conversion.discardedTracks);
-		if (!conversion.isValid || reasons.length > 0) {
-			throw new WebCodecsUnsupportedError(reasons.length > 0 ? reasons : ['invalid_conversion']);
-		}
+			const reasons = blockingReasons(conversion.discardedTracks);
+			if (!conversion.isValid || reasons.length > 0) {
+				throw new WebCodecsUnsupportedError(reasons.length > 0 ? reasons : ['invalid_conversion']);
+			}
 
-		return await withStallWatchdog(
-			async (markProgress) => {
-				let processedTime = -1;
-				conversion.onProgress = (progress, time) => {
-					if (time > processedTime) {
-						processedTime = time;
-						markProgress();
-					}
-					onProgress(Math.round(progress * 100));
-				};
-				await conversion.execute();
-				if (!target.buffer) {
-					throw new Error('WebCodecs conversion produced no output');
-				}
-				return new Uint8Array(target.buffer);
-			},
-			() => conversion.cancel(),
-			STALL_TIMEOUT_MS
-		);
+			registerCancel(() => conversion.cancel());
+			conversion.onProgress = (progress) => onProgress(Math.round(progress * 100));
+			await conversion.execute();
+			if (!target.buffer) {
+				throw new Error('WebCodecs conversion produced no output');
+			}
+			return new Uint8Array(target.buffer);
+		}, STALL_TIMEOUT_MS);
 	} finally {
 		input.dispose();
 	}

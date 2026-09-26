@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TrimOptions } from './args';
 import type { VideoMetadata } from './settings';
-import { buildWebCodecsPlan, encodeWithWebCodecs, withStallWatchdog } from './webcodecs';
+import {
+	buildWebCodecsPlan,
+	encodeWithWebCodecs,
+	withStallWatchdog,
+	type StallCancel
+} from './webcodecs';
 import { isWebCodecsAvailable, WebCodecsUnsupportedError } from './webcodecs-support';
 
 const MB = 1024 * 1024;
@@ -115,12 +120,13 @@ describe('withStallWatchdog', () => {
 		vi.useRealTimers();
 	});
 
-	const controllableTask = () => {
+	const controllableTask = (cancel?: StallCancel) => {
 		let markProgress: () => void = () => undefined;
 		let finish: (value: string) => void = () => undefined;
 		let fail: (error: unknown) => void = () => undefined;
-		const task = (mark: () => void) => {
+		const task = (mark: () => void, registerCancel: (registered: StallCancel) => void) => {
 			markProgress = mark;
+			if (cancel) registerCancel(cancel);
 			return new Promise<string>((resolve, reject) => {
 				finish = resolve;
 				fail = reject;
@@ -135,9 +141,9 @@ describe('withStallWatchdog', () => {
 	};
 
 	it('resolves with the task result when it keeps progressing', async () => {
-		const control = controllableTask();
-		const onStall = vi.fn(async () => undefined);
-		const run = withStallWatchdog(control.task, onStall, TIMEOUT);
+		const cancel = vi.fn(async () => undefined);
+		const control = controllableTask(cancel);
+		const run = withStallWatchdog(control.task, TIMEOUT);
 
 		for (let step = 0; step < 5; step++) {
 			await vi.advanceTimersByTimeAsync(TIMEOUT / 2);
@@ -146,33 +152,59 @@ describe('withStallWatchdog', () => {
 		control.finish('output');
 
 		await expect(run).resolves.toBe('output');
-		expect(onStall).not.toHaveBeenCalled();
+		expect(cancel).not.toHaveBeenCalled();
 	});
 
 	it('cancels and rejects with a stalled error when progress stops', async () => {
-		const control = controllableTask();
-		const onStall = vi.fn(async () => {
+		let control: ReturnType<typeof controllableTask>;
+		const cancel = vi.fn(async () => {
 			control.fail(new Error('Conversion canceled'));
 		});
-		const run = withStallWatchdog(control.task, onStall, TIMEOUT);
+		control = controllableTask(cancel);
+		const run = withStallWatchdog(control.task, TIMEOUT);
 		const assertion = expect(run).rejects.toMatchObject({ reasons: ['stalled'] });
 
 		await vi.advanceTimersByTimeAsync(TIMEOUT * 2);
 
 		await assertion;
-		expect(onStall).toHaveBeenCalledOnce();
+		expect(cancel).toHaveBeenCalledOnce();
 	});
 
-	it('propagates task errors without calling onStall', async () => {
+	it('rejects as stalled even when cancelling fails', async () => {
+		const control = controllableTask(async () => {
+			throw new Error('cancel failed');
+		});
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const run = withStallWatchdog(control.task, TIMEOUT);
+		const assertion = expect(run).rejects.toMatchObject({ reasons: ['stalled'] });
+
+		await vi.advanceTimersByTimeAsync(TIMEOUT * 2);
+
+		await assertion;
+		expect(warn).toHaveBeenCalledOnce();
+		warn.mockRestore();
+	});
+
+	it('rejects as stalled before any cancel is registered', async () => {
 		const control = controllableTask();
-		const onStall = vi.fn(async () => undefined);
-		const run = withStallWatchdog(control.task, onStall, TIMEOUT);
+		const run = withStallWatchdog(control.task, TIMEOUT);
+		const assertion = expect(run).rejects.toMatchObject({ reasons: ['stalled'] });
+
+		await vi.advanceTimersByTimeAsync(TIMEOUT * 2);
+
+		await assertion;
+	});
+
+	it('propagates task errors without cancelling', async () => {
+		const cancel = vi.fn(async () => undefined);
+		const control = controllableTask(cancel);
+		const run = withStallWatchdog(control.task, TIMEOUT);
 		const assertion = expect(run).rejects.toThrow('decode error');
 
 		control.fail(new Error('decode error'));
 
 		await assertion;
 		await vi.advanceTimersByTimeAsync(TIMEOUT * 3);
-		expect(onStall).not.toHaveBeenCalled();
+		expect(cancel).not.toHaveBeenCalled();
 	});
 });

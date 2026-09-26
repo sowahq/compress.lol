@@ -14,7 +14,7 @@
 		type="checkbox"
 		{id}
 		bind:checked
-		class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+		class="mt-0.5 h-4 w-4 rounded border-input text-primary focus:ring-primary"
 	/>
 	<div class="grid gap-1">
 		<label for={id} class="cursor-pointer text-sm leading-none font-medium">{label}</label>

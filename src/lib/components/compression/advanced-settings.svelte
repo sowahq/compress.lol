@@ -40,60 +40,63 @@
 	</button>
 
 	<div
-		class="overflow-hidden transition-all duration-300 ease-in-out"
-		style="max-height: {open ? '350px' : '0px'};"
+		class="grid transition-[grid-template-rows] duration-300 ease-in-out {open
+			? 'grid-rows-[1fr]'
+			: 'grid-rows-[0fr]'}"
 	>
-		<div class="space-y-4 border-t p-3">
-			<SettingToggle
-				id="audio-only-mode"
-				label={m.audio_only_mode()}
-				description={m.audio_only_mode_description()}
-				bind:checked={audioOnlyMode}
-			/>
-			<SettingToggle
-				id="mute-sound"
-				label={m.mute_sound()}
-				description={m.mute_sound_description()}
-				bind:checked={muteSound}
-			/>
-			<SettingToggle
-				id="preserve-original-fps"
-				label={m.preserve_original_fps()}
-				description={m.preserve_original_fps_description()}
-				bind:checked={preserveOriginalFps}
-			/>
-			<div class="flex flex-col space-y-3">
+		<div class="overflow-hidden">
+			<div class="space-y-4 border-t p-3">
 				<SettingToggle
-					id="trim-video"
-					label={m.trim_video()}
-					description={m.trim_video_description()}
-					bind:checked={trimVideo}
+					id="audio-only-mode"
+					label={m.audio_only_mode()}
+					description={m.audio_only_mode_description()}
+					bind:checked={audioOnlyMode}
 				/>
+				<SettingToggle
+					id="mute-sound"
+					label={m.mute_sound()}
+					description={m.mute_sound_description()}
+					bind:checked={muteSound}
+				/>
+				<SettingToggle
+					id="preserve-original-fps"
+					label={m.preserve_original_fps()}
+					description={m.preserve_original_fps_description()}
+					bind:checked={preserveOriginalFps}
+				/>
+				<div class="flex flex-col space-y-3">
+					<SettingToggle
+						id="trim-video"
+						label={m.trim_video()}
+						description={m.trim_video_description()}
+						bind:checked={trimVideo}
+					/>
 
-				{#if trimVideo}
-					<div class="grid grid-cols-2 gap-4 pl-7">
-						<div class="space-y-1.5">
-							<Label for="skip-first" class="text-xs">{m.skip_first_seconds()}</Label>
-							<Input
-								id="skip-first"
-								type="number"
-								min="0"
-								bind:value={skipFirstSeconds}
-								class="h-8 text-sm"
-							/>
+					{#if trimVideo}
+						<div class="grid grid-cols-2 gap-4 pl-7">
+							<div class="space-y-1.5">
+								<Label for="skip-first" class="text-xs">{m.skip_first_seconds()}</Label>
+								<Input
+									id="skip-first"
+									type="number"
+									min="0"
+									bind:value={skipFirstSeconds}
+									class="h-8 text-sm"
+								/>
+							</div>
+							<div class="space-y-1.5">
+								<Label for="skip-last" class="text-xs">{m.skip_last_seconds()}</Label>
+								<Input
+									id="skip-last"
+									type="number"
+									min="0"
+									bind:value={skipLastSeconds}
+									class="h-8 text-sm"
+								/>
+							</div>
 						</div>
-						<div class="space-y-1.5">
-							<Label for="skip-last" class="text-xs">{m.skip_last_seconds()}</Label>
-							<Input
-								id="skip-last"
-								type="number"
-								min="0"
-								bind:value={skipLastSeconds}
-								class="h-8 text-sm"
-							/>
-						</div>
-					</div>
-				{/if}
+					{/if}
+				</div>
 			</div>
 		</div>
 	</div>

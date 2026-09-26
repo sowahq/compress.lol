@@ -1,8 +1,12 @@
 <script module lang="ts">
 	export interface CompressionResult {
+		data: Uint8Array;
+		fileName: string;
 		originalSize: number;
-		compressedSize: number;
-		targetSize: number;
+		targetLabel: string;
+		targetMet: boolean;
+		audioOnly: boolean;
+		muteSound: boolean;
 	}
 </script>
 
@@ -22,15 +26,17 @@
 
 	let { audioOnly, result, onDownload }: Props = $props();
 
-	const targetMet = $derived(!!result && result.compressedSize <= result.targetSize);
+	const targetMet = $derived(result?.targetMet ?? false);
+	const compressedSize = $derived(result?.data.length ?? 0);
 	const reduction = $derived(
-		result && result.originalSize > 0 ? (1 - result.compressedSize / result.originalSize) * 100 : 0
+		result && result.originalSize > 0 ? (1 - compressedSize / result.originalSize) * 100 : 0
 	);
+	const showsAudioResult = $derived(result ? result.audioOnly : audioOnly);
 </script>
 
 <Card.Root>
 	<Card.Header>
-		<Card.Title>{audioOnly ? m.audio_processing_results() : m.results()}</Card.Title>
+		<Card.Title>{showsAudioResult ? m.audio_processing_results() : m.results()}</Card.Title>
 		<Card.Description>{m.results_description()}</Card.Description>
 	</Card.Header>
 	<Card.Content class="space-y-4">
@@ -44,7 +50,7 @@
 				<div class="flex items-center justify-between">
 					<span class="text-sm font-medium">{m.compressed_size()}:</span>
 					<Badge variant={targetMet ? 'default' : 'destructive'}>
-						{formatFileSize(result.compressedSize)}
+						{formatFileSize(compressedSize)}
 					</Badge>
 				</div>
 

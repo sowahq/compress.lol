@@ -17,6 +17,7 @@
 		type CompressionResult
 	} from '$lib/components/compression/results-card.svelte';
 	import type { TrimOptions } from '$lib/compression/args';
+	import { isChromiumBrowser } from '$lib/browser';
 	import type { Engine } from '$lib/compression/engine';
 	import { MAX_ENCODE_ATTEMPTS } from '$lib/compression/target';
 	import {
@@ -58,7 +59,6 @@
 	let progress = $state(0);
 	let encodeAttempt = $state(0);
 	let selectedFile = $state<File | null>(null);
-	let processedVideo = $state<Uint8Array | null>(null);
 	let result = $state<CompressionResult | null>(null);
 	let errorMessage = $state('');
 	let message = $state('Initializing...');
@@ -81,22 +81,17 @@
 	let selectedTargetValue = $state('25 MB');
 	let selectedTarget = $state(compressionTargets[1]);
 
-	onMount((): void => {
+	onMount(() => {
 		try {
 			const savedTarget = localStorage.getItem('targetSize');
 			if (savedTarget) {
 				handleTargetChange(savedTarget);
 			}
 		} catch (e) {}
+		return () => void compressor.dispose();
 	});
 
-	const browserFamily = (): Browser => {
-		try {
-			return 'userAgentData' in navigator ? 'chromium' : 'other';
-		} catch {
-			return 'other';
-		}
-	};
+	const browserFamily = (): Browser => (isChromiumBrowser() ? 'chromium' : 'other');
 
 	const processingMode = (): ProcessingMode => (audioOnlyMode ? 'audio_only' : 'compress');
 
@@ -201,7 +196,6 @@
 
 		selectedFile = file;
 		errorMessage = '';
-		processedVideo = null;
 		result = null;
 		analyzeFile(file);
 	};
@@ -238,11 +232,14 @@
 				preserveOriginalFps,
 				trim: currentTrim
 			});
-			processedVideo = outcome.data;
 			result = {
+				data: outcome.data,
+				fileName: selectedFile.name,
 				originalSize: metadata.size,
-				compressedSize: outcome.data.length,
-				targetSize
+				targetLabel: selectedTarget.label,
+				targetMet: outcome.targetMet,
+				audioOnly: audioOnlyMode,
+				muteSound
 			};
 			trackEvent('compression_succeeded', {
 				...job,
@@ -276,21 +273,24 @@
 	};
 
 	const downloadVideo = (): void => {
-		if (!processedVideo) return;
+		if (!result) return;
 
-		const blob = new Blob([new Uint8Array(processedVideo)], { type: 'video/mp4' });
+		const blob = new Blob([new Uint8Array(result.data)], { type: 'video/mp4' });
 		const url = URL.createObjectURL(blob);
 		const anchor = document.createElement('a');
 		anchor.download = outputFileName({
-			fileName: selectedFile?.name || 'video.mp4',
-			audioOnly: audioOnlyMode,
-			muteSound,
-			targetLabel: selectedTarget?.label || 'unknown'
+			fileName: result.fileName,
+			audioOnly: result.audioOnly,
+			muteSound: result.muteSound,
+			targetLabel: result.targetLabel
 		});
 		anchor.href = url;
 		document.body.appendChild(anchor);
 		anchor.click();
-		trackEvent('video_downloaded', { mode: processingMode(), target: selectedTarget.label });
+		trackEvent('video_downloaded', {
+			mode: result.audioOnly ? 'audio_only' : 'compress',
+			target: result.targetLabel
+		});
 		document.body.removeChild(anchor);
 		URL.revokeObjectURL(url);
 	};

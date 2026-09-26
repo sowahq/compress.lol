@@ -106,14 +106,7 @@ Requires WebAssembly and SharedArrayBuffer support.
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes
-4. Run tests: `npm run check`
-5. Format code: `npm run format`
-6. Commit changes: `git commit -m 'Add amazing feature'`
-7. Push to branch: `git push origin feature/amazing-feature`
-8. Open a Pull Request
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the checks to run and the pull request conventions. This project follows a [code of conduct](CODE_OF_CONDUCT.md).
 
 ---
 

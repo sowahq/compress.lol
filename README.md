@@ -52,13 +52,13 @@ npm run dev
 
 ### Compression Targets
 
-Platform presets stay just under each platform's limit (decimal megabytes):
+All sizes are decimal megabytes (1 MB = 1,000,000 bytes), the unit platforms use. Platform presets:
 
 - **Discord** – 20 MB, **Discord Nitro Basic** – 50 MB, **Discord Nitro** – 500 MB
 - **WhatsApp** – 16 MB (largest video sent as media)
 - **Gmail / Outlook** – 18 MB (25 MB limit minus attachment encoding overhead)
 
-Generic sizes: **8 MB**, **25 MB**, **50 MB**, **100 MB**, or a **custom size** from 1 to 2048 MB. Presets live in `src/lib/compression/presets.ts`.
+Generic sizes: **8 MB**, **25 MB** (default), **50 MB**, **100 MB**, or a **custom size** from 1 to 2048 MB. Presets live in `src/lib/compression/presets.ts`.
 
 ---
 

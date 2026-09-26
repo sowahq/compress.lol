@@ -10,11 +10,12 @@ describe('formatFileSize', () => {
 	const cases = [
 		{ bytes: 0, expected: '0 Bytes' },
 		{ bytes: 512, expected: '512 Bytes' },
-		{ bytes: 1536, expected: '1.5 KB' },
-		{ bytes: 8 * 1024 * 1024, expected: '8 MB' },
-		{ bytes: 23134963, expected: '22.06 MB' },
-		{ bytes: 5 * 1024 ** 3, expected: '5 GB' },
-		{ bytes: 3 * 1024 ** 4, expected: '3072 GB' }
+		{ bytes: 1500, expected: '1.5 KB' },
+		{ bytes: 8_000_000, expected: '8 MB' },
+		{ bytes: 19_999_999, expected: '20 MB' },
+		{ bytes: 23_134_963, expected: '23.13 MB' },
+		{ bytes: 5_000_000_000, expected: '5 GB' },
+		{ bytes: 3_000_000_000_000, expected: '3000 GB' }
 	];
 
 	it.each(cases)('$bytes bytes', ({ bytes, expected }) => {

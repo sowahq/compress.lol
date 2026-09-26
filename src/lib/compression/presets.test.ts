@@ -18,7 +18,7 @@ describe('TARGET_PRESETS', () => {
 		expect(new Set(ids).size).toBe(ids.length);
 	});
 
-	const platformLimits = [
+	const documentedLimits = [
 		{ id: 'discord', bytes: 20_000_000 },
 		{ id: 'discord-nitro-basic', bytes: 50_000_000 },
 		{ id: 'discord-nitro', bytes: 500_000_000 },
@@ -26,17 +26,20 @@ describe('TARGET_PRESETS', () => {
 		{ id: 'email', bytes: 18_000_000 }
 	];
 
-	it.each(platformLimits)(
-		'$id stays under its platform limit in decimal megabytes',
-		({ id, bytes }) => {
-			expect(findPreset(id)?.bytes).toBe(bytes);
-		}
-	);
+	it.each(documentedLimits)('$id resolves to the pinned documented size', ({ id, bytes }) => {
+		expect(resolveTarget({ presetId: id, customMb: null })?.bytes).toBe(bytes);
+	});
 
-	it('keeps the legacy generic sizes in binary megabytes', () => {
+	it('uses decimal megabytes for generic sizes too', () => {
 		expect(
-			TARGET_PRESETS.filter((preset) => preset.group === 'size').map((preset) => preset.bytes)
-		).toEqual([8, 25, 50, 100].map((mb) => mb * 1024 * 1024));
+			TARGET_PRESETS.filter((preset) => preset.group === 'size').map(
+				(preset) => resolveTarget({ presetId: preset.id, customMb: null })?.bytes
+			)
+		).toEqual([8_000_000, 25_000_000, 50_000_000, 100_000_000]);
+	});
+
+	it('keeps the previous 25 MB default', () => {
+		expect(DEFAULT_SELECTION).toEqual({ presetId: 'size-25', customMb: null });
 	});
 });
 
@@ -84,17 +87,17 @@ describe('resolveTarget', () => {
 		{
 			name: 'generic size keeps the legacy analytics label',
 			selection: { presetId: 'size-8', customMb: null },
-			expected: { bytes: 8 * 1024 * 1024, label: '8 MB', fileTag: '8MB', analyticsId: '8 MB' }
+			expected: { bytes: 8_000_000, label: '8 MB', fileTag: '8MB', analyticsId: '8 MB' }
 		},
 		{
 			name: 'custom size',
 			selection: { presetId: 'custom', customMb: 12.5 },
-			expected: {
-				bytes: Math.floor(12.5 * 1024 * 1024),
-				label: '12.5 MB',
-				fileTag: '12.5MB',
-				analyticsId: 'custom'
-			}
+			expected: { bytes: 12_500_000, label: '12.5 MB', fileTag: '12.5MB', analyticsId: 'custom' }
+		},
+		{
+			name: 'custom size rounded to a tenth everywhere',
+			selection: { presetId: 'custom', customMb: 12.55 },
+			expected: { bytes: 12_600_000, label: '12.6 MB', fileTag: '12.6MB', analyticsId: 'custom' }
 		},
 		{ name: 'invalid custom size', selection: { presetId: 'custom', customMb: 0 }, expected: null },
 		{
@@ -132,7 +135,13 @@ describe('restoreSelection', () => {
 			expected: { presetId: 'size-8', customMb: null }
 		},
 		{ name: 'unknown legacy label', stored: null, legacy: '12 MB', expected: DEFAULT_SELECTION },
-		{ name: 'corrupted json', stored: '{oops', legacy: '8 MB', expected: DEFAULT_SELECTION },
+		{
+			name: 'corrupted json falls back to the legacy value',
+			stored: '{oops',
+			legacy: '8 MB',
+			expected: { presetId: 'size-8', customMb: null }
+		},
+		{ name: 'corrupted json alone', stored: '{oops', legacy: null, expected: DEFAULT_SELECTION },
 		{
 			name: 'removed preset falls back to the legacy value',
 			stored: '{"presetId":"myspace","customMb":null}',

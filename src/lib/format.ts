@@ -1,10 +1,10 @@
 const BYTE_UNITS = ['Bytes', 'KB', 'MB', 'GB'];
-const KIB = 1024;
+const KILO = 1000;
 
 export const formatFileSize = (bytes: number): string => {
 	if (bytes === 0) return '0 Bytes';
-	const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(KIB)), BYTE_UNITS.length - 1);
-	return `${parseFloat((bytes / Math.pow(KIB, exponent)).toFixed(2))} ${BYTE_UNITS[exponent]}`;
+	const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(KILO)), BYTE_UNITS.length - 1);
+	return `${parseFloat((bytes / Math.pow(KILO, exponent)).toFixed(2))} ${BYTE_UNITS[exponent]}`;
 };
 
 export const formatDuration = (seconds: number): string => {

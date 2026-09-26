@@ -10,10 +10,12 @@
 	import type { Engine } from '$lib/compression/engine';
 	import type { BitrateMode } from '$lib/compression/webcodecs';
 	import {
+		browserDependencies,
 		CompressionJobError,
 		createCompressor,
 		type VideoAnalysis
 	} from '$lib/compression/compressor';
+	import { optimalThreadCount } from '$lib/compression/ffmpeg';
 	import {
 		isWebCodecsAvailable,
 		WebCodecsUnsupportedError
@@ -68,23 +70,36 @@
 
 	const metadata = $derived(analysis?.metadata ?? null);
 
-	const compressor = createCompressor({
-		onProgress: (percent) => {
-			const current = results.find((result) => result.status === 'running');
-			if (current) current.progress = percent;
+	const runningResult = (): LabResult | undefined =>
+		results.find((result) => result.status === 'running');
+
+	const compressor = createCompressor(
+		{
+			onProgress: (percent) => {
+				const current = runningResult();
+				if (current) current.progress = percent;
+			},
+			onEncodeStart: () => {
+				const current = runningResult();
+				if (current) current.progress = 0;
+			},
+			onFFmpegLoading: (loading) => {
+				if (loading) ffmpegState = 'loading';
+				else if (ffmpegState === 'loading') ffmpegState = 'ready';
+			},
+			onFFmpegLoadError: () => (ffmpegState = 'failed')
 		},
-		onFFmpegLoading: (loading) => {
-			if (loading) ffmpegState = 'loading';
-			else if (ffmpegState === 'loading') ffmpegState = 'ready';
-		},
-		onFFmpegLoadError: () => (ffmpegState = 'failed')
-	});
+		{ ...browserDependencies, threadCount: optimalThreadCount }
+	);
 
 	const revokeResultUrls = (): void => {
 		results.forEach((result) => result.url && URL.revokeObjectURL(result.url));
 	};
 
-	onMount(() => revokeResultUrls);
+	onMount(() => () => {
+		revokeResultUrls();
+		void compressor.dispose();
+	});
 
 	const handleFile = async (event: Event): Promise<void> => {
 		const input = event.currentTarget;
@@ -213,7 +228,7 @@
 				</p>
 			{:else if probeFailed}
 				<p class="text-sm text-destructive" data-testid="lab-metadata">
-					Mediabunny cannot read this file.
+					This file could not be analyzed.
 				</p>
 			{/if}
 

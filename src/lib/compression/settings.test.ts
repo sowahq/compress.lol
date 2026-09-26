@@ -4,6 +4,10 @@ import {
 	calculateOptimalResolution,
 	fitWithinLongestEdge,
 	MAX_ENCODE_EDGE,
+	MIN_AUDIO_BITRATE_KBPS,
+	MIN_VIDEO_BITRATE_KBPS,
+	minimumTargetSize,
+	totalBitrateBudget,
 	type CompressionSettings,
 	type VideoMetadata
 } from './settings';
@@ -138,17 +142,88 @@ describe('calculateCompressionSettings', () => {
 			expected: { resolution: '1280x720', crf: 20, targetFps: 30 }
 		},
 		{
-			name: 'very long video keeps the 200k video bitrate floor',
+			name: 'two-minute 1080p video to 8 MB drops to 640 px and 24 fps',
+			targetSize: 8 * MB,
+			metadata: video({ duration: 120, resolution: '1920x1080' }),
+			preserveOriginalFps: false,
+			expected: { resolution: '640x360', targetFps: 24, videoBitrate: '393k', audioBitrate: '54k' }
+		},
+		{
+			name: 'very long video to 8 MB drops to 426 px and 15 fps',
+			targetSize: 8 * MB,
+			metadata: video({ duration: 600, resolution: '1920x1080' }),
+			preserveOriginalFps: false,
+			expected: { resolution: '426x240', targetFps: 15, videoBitrate: '65k', audioBitrate: '24k' }
+		},
+		{
+			name: 'low bitrate ladder respects preserved FPS',
+			targetSize: 8 * MB,
+			metadata: video({ duration: 600, resolution: '1920x1080' }),
+			preserveOriginalFps: true,
+			expected: { resolution: '426x240', targetFps: 60 }
+		},
+		{
+			name: 'bitrate never drops below the video floor',
 			targetSize: 8 * MB,
 			metadata: video({ duration: 3600 }),
 			preserveOriginalFps: false,
-			expected: { videoBitrate: '200k', audioBitrate: '2k' }
+			expected: { videoBitrate: `${MIN_VIDEO_BITRATE_KBPS}k` }
 		}
 	];
 
 	it.each(cases)('$name', ({ targetSize, metadata, preserveOriginalFps, expected }) => {
-		expect(calculateCompressionSettings(targetSize, metadata, preserveOriginalFps)).toMatchObject(
-			expected
+		expect(
+			calculateCompressionSettings(targetSize, metadata, { preserveOriginalFps, muteSound: false })
+		).toMatchObject(expected);
+	});
+
+	it('gives the whole budget to video when the sound is muted', () => {
+		const metadata = video({ duration: 120, resolution: '1920x1080' });
+		const withSound = calculateCompressionSettings(8 * MB, metadata, {
+			preserveOriginalFps: false,
+			muteSound: false
+		});
+		const muted = calculateCompressionSettings(8 * MB, metadata, {
+			preserveOriginalFps: false,
+			muteSound: true
+		});
+
+		expect(parseInt(muted.videoBitrate)).toBe(
+			parseInt(withSound.videoBitrate) + parseInt(withSound.audioBitrate)
 		);
+	});
+});
+
+describe('minimumTargetSize', () => {
+	const cases = [
+		{ duration: 30, hasMotion: true, muteSound: false },
+		{ duration: 600, hasMotion: true, muteSound: false },
+		{ duration: 600, hasMotion: false, muteSound: false },
+		{ duration: 600, hasMotion: true, muteSound: true },
+		{ duration: 3600, hasMotion: false, muteSound: true },
+		{ duration: 7.3, hasMotion: true, muteSound: false }
+	];
+
+	it.each(cases)(
+		'$duration s, motion $hasMotion, muted $muteSound funds the bitrate floors',
+		({ duration, hasMotion, muteSound }) => {
+			const minimum = minimumTargetSize(duration, hasMotion, muteSound);
+			const floor = MIN_VIDEO_BITRATE_KBPS + (muteSound ? 0 : MIN_AUDIO_BITRATE_KBPS);
+
+			expect(totalBitrateBudget(minimum, duration, hasMotion)).toBeGreaterThanOrEqual(floor);
+			expect(totalBitrateBudget(minimum, duration, hasMotion)).toBeLessThanOrEqual(floor + 1);
+		}
+	);
+
+	it('shrinks when the sound is muted', () => {
+		expect(minimumTargetSize(600, true, true)).toBeLessThan(minimumTargetSize(600, true, false));
+	});
+
+	it('flags an hour-long video as unreachable at 8 MB', () => {
+		expect(minimumTargetSize(3600, true, false)).toBeGreaterThan(8 * MB);
+	});
+
+	it('accepts a two-minute video at 8 MB', () => {
+		expect(minimumTargetSize(120, true, false)).toBeLessThan(8 * MB);
 	});
 });

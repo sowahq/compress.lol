@@ -1,4 +1,17 @@
 export const MAX_ENCODE_EDGE = 1920;
+export const MIN_VIDEO_BITRATE_KBPS = 64;
+export const MIN_AUDIO_BITRATE_KBPS = 24;
+
+const MAX_AUDIO_BITRATE_KBPS = 128;
+const AUDIO_BITRATE_SHARE = 0.12;
+
+const LOW_BITRATE_LADDER = [
+	{ minVideoKbps: 1500, maxEdge: MAX_ENCODE_EDGE, fpsCap: Infinity },
+	{ minVideoKbps: 800, maxEdge: 1280, fpsCap: Infinity },
+	{ minVideoKbps: 400, maxEdge: 854, fpsCap: Infinity },
+	{ minVideoKbps: 200, maxEdge: 640, fpsCap: 24 },
+	{ minVideoKbps: 0, maxEdge: 426, fpsCap: 15 }
+];
 
 export interface VideoMetadata {
 	duration: number;
@@ -22,6 +35,47 @@ export interface CompressionSettings {
 	bframes: number;
 	targetFps: number;
 }
+
+export interface EncodingOptions {
+	preserveOriginalFps: boolean;
+	muteSound: boolean;
+}
+
+const encodingEfficiency = (hasMotion: boolean): number => (hasMotion ? 0.8 : 0.85);
+
+const requiredBitrateKbps = (muteSound: boolean): number =>
+	MIN_VIDEO_BITRATE_KBPS + (muteSound ? 0 : MIN_AUDIO_BITRATE_KBPS);
+
+export const totalBitrateBudget = (
+	targetSize: number,
+	duration: number,
+	hasMotion: boolean
+): number => Math.round(((targetSize * 8) / duration / 1000) * encodingEfficiency(hasMotion));
+
+export const minimumTargetSize = (
+	duration: number,
+	hasMotion: boolean,
+	muteSound: boolean
+): number =>
+	Math.ceil((requiredBitrateKbps(muteSound) * 1000 * duration) / 8 / encodingEfficiency(hasMotion));
+
+const splitBitrate = (
+	totalKbps: number,
+	muteSound: boolean
+): { videoKbps: number; audioKbps: number } => {
+	if (muteSound) {
+		return { videoKbps: Math.max(MIN_VIDEO_BITRATE_KBPS, totalKbps), audioKbps: 0 };
+	}
+	const audioKbps = Math.min(
+		MAX_AUDIO_BITRATE_KBPS,
+		Math.max(MIN_AUDIO_BITRATE_KBPS, Math.round(totalKbps * AUDIO_BITRATE_SHARE))
+	);
+	return { videoKbps: Math.max(MIN_VIDEO_BITRATE_KBPS, totalKbps - audioKbps), audioKbps };
+};
+
+const ladderStep = (videoKbps: number): (typeof LOW_BITRATE_LADDER)[number] =>
+	LOW_BITRATE_LADDER.find((step) => videoKbps >= step.minVideoKbps) ??
+	LOW_BITRATE_LADDER[LOW_BITRATE_LADDER.length - 1];
 
 export const calculateOptimalResolution = (
 	originalWidth: number,
@@ -58,12 +112,13 @@ export const fitWithinLongestEdge = (resolution: string, maxEdge: number): strin
 export const calculateCompressionSettings = (
 	targetSize: number,
 	metadata: VideoMetadata,
-	preserveOriginalFps: boolean
+	{ preserveOriginalFps, muteSound }: EncodingOptions
 ): CompressionSettings => {
-	const efficiency = metadata.hasMotion ? 0.8 : 0.85;
-	const targetBitrate = Math.round(((targetSize * 8) / metadata.duration / 1000) * efficiency);
-	const audioBitrate = Math.min(128, Math.round(targetBitrate * 0.12));
-	const videoBitrate = Math.max(200, targetBitrate - audioBitrate);
+	const { videoKbps: videoBitrate, audioKbps: audioBitrate } = splitBitrate(
+		totalBitrateBudget(targetSize, metadata.duration, metadata.hasMotion),
+		muteSound
+	);
+	const ladder = ladderStep(videoBitrate);
 
 	let resolution = metadata.resolution;
 	let crf = 23;
@@ -98,10 +153,10 @@ export const calculateCompressionSettings = (
 		fpsCap = 30;
 	}
 
-	resolution = fitWithinLongestEdge(resolution, MAX_ENCODE_EDGE);
+	resolution = fitWithinLongestEdge(resolution, ladder.maxEdge);
 
 	if (!preserveOriginalFps) {
-		targetFps = Math.min(targetFps, fpsCap);
+		targetFps = Math.min(targetFps, fpsCap, ladder.fpsCap);
 	}
 
 	const bufferSize = metadata.hasMotion ? `${videoBitrate * 3}k` : `${videoBitrate * 2}k`;

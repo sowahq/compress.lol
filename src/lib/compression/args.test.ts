@@ -183,6 +183,12 @@ describe('buildCompressionArgs', () => {
 			check: (args) => expect(args.slice(0, 6)).toEqual(['-ss', '3', '-i', INPUT, '-t', '25'])
 		},
 		{
+			name: 'muted output spends the audio share on video',
+			metadata: { ...video4k60, duration: 120, resolution: '1920x1080', fps: 30 },
+			options: options({ targetSize: 8 * MB, muteSound: true }),
+			check: (args) => expect(valueAfter(args, '-maxrate')).toBe('447k')
+		},
+		{
 			name: 'always ends with the output file',
 			metadata: video4k60,
 			options: options({ targetSize: 8 * MB, muteSound: true }),

@@ -55,11 +55,10 @@ export const buildCompressionArgs = (
 	metadata: VideoMetadata,
 	options: CompressionArgsOptions
 ): string[] => {
-	const settings = calculateCompressionSettings(
-		options.targetSize,
-		metadata,
-		options.preserveOriginalFps
-	);
+	const settings = calculateCompressionSettings(options.targetSize, metadata, {
+		preserveOriginalFps: options.preserveOriginalFps,
+		muteSound: options.muteSound
+	});
 
 	const args = buildInputArgs(inputPath, metadata.duration, options.trim);
 

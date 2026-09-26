@@ -52,10 +52,13 @@ npm run dev
 
 ### Compression Targets
 
-- **8 MB** – Ultra compression for sharing
-- **25 MB** – High compression for social media
-- **50 MB** – Medium compression for email
-- **100 MB** – Low compression for archival
+Platform presets stay just under each platform's limit (decimal megabytes):
+
+- **Discord** – 20 MB, **Discord Nitro Basic** – 50 MB, **Discord Nitro** – 500 MB
+- **WhatsApp** – 16 MB (largest video sent as media)
+- **Gmail / Outlook** – 18 MB (25 MB limit minus attachment encoding overhead)
+
+Generic sizes: **8 MB**, **25 MB**, **50 MB**, **100 MB**, or a **custom size** from 1 to 2048 MB. Presets live in `src/lib/compression/presets.ts`.
 
 ---
 

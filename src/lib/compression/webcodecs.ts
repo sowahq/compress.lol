@@ -11,6 +11,7 @@ import {
 } from 'mediabunny';
 import { effectiveDuration, type CompressionArgsOptions } from './args';
 import { buildVideoMetadata, calculateCompressionSettings, type VideoMetadata } from './settings';
+import { prepareAacEncoder, prepareVideoEncoder } from './webcodecs-compat';
 import { isWebCodecsAvailable, WebCodecsUnsupportedError } from './webcodecs-support';
 
 export type BitrateMode = 'constant' | 'variable';
@@ -99,6 +100,11 @@ export const encodeWithWebCodecs = async (
 ): Promise<Uint8Array> => {
 	if (!isWebCodecsAvailable()) {
 		throw new WebCodecsUnsupportedError(['webcodecs_unavailable']);
+	}
+
+	await prepareVideoEncoder();
+	if (!options.muteSound) {
+		await prepareAacEncoder();
 	}
 
 	const plan = buildWebCodecsPlan(metadata, options);

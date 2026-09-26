@@ -135,10 +135,7 @@ export const encodeWithWebCodecs = async (
 		throw new WebCodecsUnsupportedError(['webcodecs_unavailable']);
 	}
 
-	await prepareVideoEncoder();
-	if (!options.muteSound) {
-		await prepareAacEncoder();
-	}
+	await Promise.all([prepareVideoEncoder(), options.muteSound ? null : prepareAacEncoder()]);
 
 	const plan = buildWebCodecsPlan(metadata, options);
 	const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });

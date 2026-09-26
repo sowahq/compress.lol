@@ -3,17 +3,25 @@ import { canEncodeAudio } from 'mediabunny';
 const REORDERING_PROBE_CODEC = 'avc1.640028';
 const REORDERING_PROBE_SIZE = { width: 320, height: 240 };
 const REORDERING_PROBE_FRAMES = 5;
-const REORDERING_PROBE_TIMEOUT_MS = 2000;
+const REORDERING_PROBE_TIMEOUT_MS = 5000;
+const REORDERING_CODEC_PREFIXES = ['avc1.4d', 'avc1.64'];
 
 const resolveAfter = <T>(ms: number, value: T): Promise<T> =>
 	new Promise((resolve) => setTimeout(() => resolve(value), ms));
 
 /**
  * Detects encoders that accept H.264 Main/High in `quality` latency mode but never emit
- * output, which WebKit does as of Safari 26/27.
+ * output, which WebKit does as of Safari 26/27. An encoder that emits anything, even slowly,
+ * is considered healthy.
  */
 export const encoderStallsWithFrameReordering = async (): Promise<boolean> => {
-	const encoder = new VideoEncoder({ output: () => undefined, error: () => undefined });
+	let outputs = 0;
+	const encoder = new VideoEncoder({
+		output: () => {
+			outputs++;
+		},
+		error: () => undefined
+	});
 	try {
 		encoder.configure({
 			codec: REORDERING_PROBE_CODEC,
@@ -39,7 +47,7 @@ export const encoderStallsWithFrameReordering = async (): Promise<boolean> => {
 			),
 			resolveAfter(REORDERING_PROBE_TIMEOUT_MS, false)
 		]);
-		return !flushed;
+		return !flushed && outputs === 0;
 	} catch {
 		return false;
 	} finally {
@@ -49,34 +57,58 @@ export const encoderStallsWithFrameReordering = async (): Promise<boolean> => {
 	}
 };
 
-const forceRealtimeLatencyMode = (): void => {
+export const usesFrameReordering = (codec: string): boolean =>
+	REORDERING_CODEC_PREFIXES.some((prefix) => codec.toLowerCase().startsWith(prefix));
+
+export const withRealtimeLatency = (config: VideoEncoderConfig): VideoEncoderConfig =>
+	config.latencyMode === undefined && usesFrameReordering(config.codec)
+		? { ...config, latencyMode: 'realtime' }
+		: config;
+
+const forceRealtimeLatencyForReorderingCodecs = (): void => {
 	const configure = VideoEncoder.prototype.configure;
 	VideoEncoder.prototype.configure = function (config: VideoEncoderConfig): void {
-		configure.call(
-			this,
-			config.latencyMode === undefined ? { ...config, latencyMode: 'realtime' } : config
-		);
+		configure.call(this, withRealtimeLatency(config));
 	};
+};
+
+const cacheUnlessRejected = <T>(
+	read: () => Promise<T> | null,
+	write: (value: Promise<T> | null) => void,
+	create: () => Promise<T>
+): Promise<T> => {
+	const cached = read();
+	if (cached) return cached;
+	const created = create().catch((error: unknown) => {
+		write(null);
+		throw error;
+	});
+	write(created);
+	return created;
 };
 
 let videoEncoderPreparation: Promise<void> | null = null;
 let aacEncoderPreparation: Promise<void> | null = null;
 
-export const prepareVideoEncoder = (): Promise<void> => {
-	videoEncoderPreparation ??= encoderStallsWithFrameReordering().then((stalls) => {
-		if (stalls) {
-			forceRealtimeLatencyMode();
+export const prepareVideoEncoder = (): Promise<void> =>
+	cacheUnlessRejected(
+		() => videoEncoderPreparation,
+		(value) => (videoEncoderPreparation = value),
+		async () => {
+			if (await encoderStallsWithFrameReordering()) {
+				forceRealtimeLatencyForReorderingCodecs();
+			}
 		}
-	});
-	return videoEncoderPreparation;
-};
+	);
 
-export const prepareAacEncoder = (): Promise<void> => {
-	aacEncoderPreparation ??= canEncodeAudio('aac').then(async (supported) => {
-		if (!supported) {
-			const { registerAacEncoder } = await import('@mediabunny/aac-encoder');
-			registerAacEncoder();
+export const prepareAacEncoder = (): Promise<void> =>
+	cacheUnlessRejected(
+		() => aacEncoderPreparation,
+		(value) => (aacEncoderPreparation = value),
+		async () => {
+			if (!(await canEncodeAudio('aac'))) {
+				const { registerAacEncoder } = await import('@mediabunny/aac-encoder');
+				registerAacEncoder();
+			}
 		}
-	});
-	return aacEncoderPreparation;
-};
+	);

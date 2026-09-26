@@ -3,7 +3,8 @@
 		data: Uint8Array;
 		fileName: string;
 		originalSize: number;
-		targetLabel: string;
+		fileTag: string;
+		targetId: string;
 		targetMet: boolean;
 		audioOnly: boolean;
 		muteSound: boolean;

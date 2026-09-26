@@ -209,15 +209,19 @@ describe('requiredTargetSize', () => {
 describe('outputFileName', () => {
 	const cases = [
 		{
-			options: { fileName: 'a.mp4', audioOnly: false, muteSound: false, targetLabel: '8 MB' },
+			options: { fileName: 'a.mp4', audioOnly: false, muteSound: false, fileTag: '8MB' },
 			expected: 'compressed_8MB_a.mp4'
 		},
 		{
-			options: { fileName: 'a.mp4', audioOnly: true, muteSound: true, targetLabel: '8 MB' },
+			options: { fileName: 'a.mp4', audioOnly: false, muteSound: false, fileTag: 'discord' },
+			expected: 'compressed_discord_a.mp4'
+		},
+		{
+			options: { fileName: 'a.mp4', audioOnly: true, muteSound: true, fileTag: '8MB' },
 			expected: 'no_audio_a.mp4'
 		},
 		{
-			options: { fileName: 'a.mp4', audioOnly: true, muteSound: false, targetLabel: '25 MB' },
+			options: { fileName: 'a.mp4', audioOnly: true, muteSound: false, fileTag: '25MB' },
 			expected: 'with_audio_a.mp4'
 		}
 	];

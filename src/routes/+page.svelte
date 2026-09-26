@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
-	import * as Select from '$lib/components/ui/select/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Progress } from '$lib/components/ui/progress/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -13,6 +12,14 @@
 	import LanguageSelector from '$lib/components/ui/selector/language-selector.svelte';
 	import ThemeSelector from '$lib/components/ui/selector/theme-selector.svelte';
 	import AdvancedSettings from '$lib/components/compression/advanced-settings.svelte';
+	import TargetPicker from '$lib/components/compression/target-picker.svelte';
+	import {
+		DEFAULT_SELECTION,
+		resolveTarget,
+		restoreSelection,
+		serializeSelection,
+		type TargetSelection
+	} from '$lib/compression/presets';
 	import ResultsCard, {
 		type CompressionResult
 	} from '$lib/components/compression/results-card.svelte';
@@ -45,12 +52,6 @@
 		type ProcessingMode
 	} from '$lib/analytics';
 
-	interface CompressionTarget {
-		label: string;
-		value: number;
-		description: string;
-	}
-
 	let ffmpegLoading = $state(false);
 	let isAnalyzing = $state(false);
 	let analysis = $state<VideoAnalysis | null>(null);
@@ -71,22 +72,18 @@
 	let skipFirstSeconds = $state(0);
 	let skipLastSeconds = $state(0);
 
-	const compressionTargets: CompressionTarget[] = [
-		{ label: '8 MB', value: 8 * 1024 * 1024, description: 'Ultra compression' },
-		{ label: '25 MB', value: 25 * 1024 * 1024, description: 'High compression' },
-		{ label: '50 MB', value: 50 * 1024 * 1024, description: 'Medium compression' },
-		{ label: '100 MB', value: 100 * 1024 * 1024, description: 'Low compression' }
-	];
+	const TARGET_STORAGE_KEY = 'target';
+	const LEGACY_TARGET_STORAGE_KEY = 'targetSize';
 
-	let selectedTargetValue = $state('25 MB');
-	let selectedTarget = $state(compressionTargets[1]);
+	let targetSelection = $state<TargetSelection>(DEFAULT_SELECTION);
+	const target = $derived(resolveTarget(targetSelection));
 
 	onMount(() => {
 		try {
-			const savedTarget = localStorage.getItem('targetSize');
-			if (savedTarget) {
-				handleTargetChange(savedTarget);
-			}
+			targetSelection = restoreSelection(
+				localStorage.getItem(TARGET_STORAGE_KEY),
+				localStorage.getItem(LEGACY_TARGET_STORAGE_KEY)
+			);
 		} catch (e) {}
 		return () => void compressor.dispose();
 	});
@@ -133,12 +130,10 @@
 		videoMetadata ? requiredTargetSize(videoMetadata, currentTrim, muteSound) : 0
 	);
 
-	const isTargetUnreachable = $derived(
-		!audioOnlyMode && !!selectedTarget && minimumSize > selectedTarget.value
-	);
+	const isTargetUnreachable = $derived(!audioOnlyMode && !!target && minimumSize > target.bytes);
 
 	const isFileSmallerThanTarget = $derived(
-		!!selectedTarget && !!selectedFile && selectedFile.size < selectedTarget.value
+		!!target && !!selectedFile && selectedFile.size < target.bytes
 	);
 
 	let analysisId = 0;
@@ -201,7 +196,7 @@
 	};
 
 	const compressVideo = async (): Promise<void> => {
-		if (!selectedFile || !analysis || isAnalyzing || isTargetUnreachable) return;
+		if (!selectedFile || !analysis || !target || isAnalyzing || isTargetUnreachable) return;
 
 		isProcessing = true;
 		encodeAttempt = 0;
@@ -209,8 +204,8 @@
 		resetProgress();
 		const jobStartTime = startTime;
 		const metadata = analysis.metadata;
-		const targetSize = selectedTarget.value;
-		const job = { mode: processingMode(), target: selectedTarget.label, browser: browserFamily() };
+		const targetSize = target.bytes;
+		const job = { mode: processingMode(), target: target.analyticsId, browser: browserFamily() };
 		const resolution = resolutionTier(metadata.resolution);
 
 		trackEvent('compression_started', {
@@ -236,7 +231,8 @@
 				data: outcome.data,
 				fileName: selectedFile.name,
 				originalSize: metadata.size,
-				targetLabel: selectedTarget.label,
+				fileTag: target.fileTag,
+				targetId: target.analyticsId,
 				targetMet: outcome.targetMet,
 				audioOnly: audioOnlyMode,
 				muteSound
@@ -282,29 +278,25 @@
 			fileName: result.fileName,
 			audioOnly: result.audioOnly,
 			muteSound: result.muteSound,
-			targetLabel: result.targetLabel
+			fileTag: result.fileTag
 		});
 		anchor.href = url;
 		document.body.appendChild(anchor);
 		anchor.click();
 		trackEvent('video_downloaded', {
 			mode: result.audioOnly ? 'audio_only' : 'compress',
-			target: result.targetLabel
+			target: result.targetId
 		});
 		document.body.removeChild(anchor);
 		URL.revokeObjectURL(url);
 	};
 
-	const handleTargetChange = (value: string | undefined): void => {
-		if (!value) return;
-		selectedTargetValue = value;
-		const target = compressionTargets.find((t) => t.label === value);
-		if (target) {
-			selectedTarget = target;
-			try {
-				localStorage.setItem('targetSize', value);
-			} catch (e) {}
-		}
+	const handleTargetChange = (selection: TargetSelection): void => {
+		targetSelection = selection;
+		try {
+			localStorage.setItem(TARGET_STORAGE_KEY, serializeSelection(selection));
+			localStorage.removeItem(LEGACY_TARGET_STORAGE_KEY);
+		} catch (e) {}
 	};
 </script>
 
@@ -387,19 +379,7 @@
 					</div>
 				{/if}
 
-				<div>
-					<Label>{m.target_size()}</Label>
-					<Select.Root type="single" value={selectedTargetValue} onValueChange={handleTargetChange}>
-						<Select.Trigger class="mt-2 w-full">
-							{selectedTargetValue || m.select_target_size()}
-						</Select.Trigger>
-						<Select.Content>
-							{#each compressionTargets as target (target.label)}
-								<Select.Item value={target.label}>{target.label}</Select.Item>
-							{/each}
-						</Select.Content>
-					</Select.Root>
-				</div>
+				<TargetPicker selection={targetSelection} onchange={handleTargetChange} />
 
 				<AdvancedSettings
 					bind:audioOnlyMode
@@ -430,6 +410,7 @@
 					onclick={compressVideo}
 					disabled={!selectedFile ||
 						!videoMetadata ||
+						!target ||
 						isAnalyzing ||
 						isProcessing ||
 						isTargetUnreachable}

@@ -58,18 +58,18 @@ export interface OutputNameOptions {
 	fileName: string;
 	audioOnly: boolean;
 	muteSound: boolean;
-	targetLabel: string;
+	fileTag: string;
 }
 
 export const outputFileName = ({
 	fileName,
 	audioOnly,
 	muteSound,
-	targetLabel
+	fileTag
 }: OutputNameOptions): string =>
 	audioOnly
 		? `${muteSound ? 'no_audio' : 'with_audio'}_${fileName}`
-		: `compressed_${targetLabel.replace(' ', '')}_${fileName}`;
+		: `compressed_${fileTag}_${fileName}`;
 
 export interface VideoAnalysis {
 	metadata: VideoMetadata;

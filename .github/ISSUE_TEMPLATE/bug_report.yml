@@ -1,0 +1,43 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting. Please do not attach private videos; describe them instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected and what you got instead.
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 140, Safari 27, Firefox 155...
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 16, Windows 11, iOS 27, Android 16...
+  - type: input
+    id: video
+    attributes:
+      label: Video
+      description: Container, codec, resolution, duration and size, as far as you know.
+      placeholder: MP4, HEVC, 3840x2160, 45 s, 180 MB
+  - type: input
+    id: target
+    attributes:
+      label: Target size and options
+      placeholder: Discord (20 MB), mute sound, trim
+  - type: textarea
+    id: console
+    attributes:
+      label: Console errors
+      description: Open the developer tools (F12) and paste any error from the Console tab.
+      render: text

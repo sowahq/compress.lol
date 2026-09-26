@@ -8,6 +8,7 @@ describe('umamiForwardHeaders', () => {
 				'content-type': 'application/json',
 				'user-agent': 'Safari',
 				'accept-language': 'fr-FR',
+				'x-umami-cache': 'token',
 				cookie: 'session=secret',
 				authorization: 'Bearer secret'
 			}),
@@ -18,6 +19,7 @@ describe('umamiForwardHeaders', () => {
 			'content-type': 'application/json',
 			'user-agent': 'Safari',
 			'accept-language': 'fr-FR',
+			'x-umami-cache': 'token',
 			'x-forwarded-for': '203.0.113.7'
 		});
 	});
@@ -38,7 +40,38 @@ describe('proxyUmamiScript', () => {
 	});
 });
 
+describe('proxyUmamiScript failures', () => {
+	const cases = [
+		{ name: 'upstream error', fetcher: async () => new Response('down', { status: 503 }) },
+		{
+			name: 'network failure',
+			fetcher: async (): Promise<Response> => {
+				throw new TypeError('fetch failed');
+			}
+		}
+	];
+
+	it.each(cases)('returns an uncached 502 on $name', async ({ fetcher }) => {
+		const response = await proxyUmamiScript(vi.fn<typeof fetch>(fetcher));
+
+		expect(response.status).toBe(502);
+		expect(response.headers.get('cache-control')).toBe('no-store');
+	});
+});
+
 describe('proxyUmamiEvent', () => {
+	it('returns 502 when Umami is unreachable', async () => {
+		const fetcher = vi.fn<typeof fetch>(async () => {
+			throw new TypeError('fetch failed');
+		});
+		const request = new Request('https://compress.lol/stats/api/send', {
+			method: 'POST',
+			body: '{}'
+		});
+
+		expect((await proxyUmamiEvent(fetcher, request, '198.51.100.4')).status).toBe(502);
+	});
+
 	it('forwards the event body and relays the upstream status', async () => {
 		const fetcher = vi.fn<typeof fetch>(async () => new Response('{"ok":true}', { status: 202 }));
 		const request = new Request('https://compress.lol/stats/api/send', {

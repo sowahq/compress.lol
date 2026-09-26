@@ -1,5 +1,11 @@
 const UMAMI_ORIGIN = 'https://cloud.umami.is';
-const FORWARDED_HEADERS = ['content-type', 'user-agent', 'accept-language', 'referer'];
+const FORWARDED_HEADERS = [
+	'content-type',
+	'user-agent',
+	'accept-language',
+	'referer',
+	'x-umami-cache'
+];
 const SCRIPT_CACHE_CONTROL = 'public, max-age=3600';
 
 export const umamiForwardHeaders = (source: Headers, clientAddress: string): Headers => {
@@ -14,8 +20,14 @@ export const umamiForwardHeaders = (source: Headers, clientAddress: string): Hea
 	return headers;
 };
 
+const upstreamUnavailable = (): Response =>
+	new Response(null, { status: 502, headers: { 'cache-control': 'no-store' } });
+
 export const proxyUmamiScript = async (fetcher: typeof fetch): Promise<Response> => {
-	const upstream = await fetcher(`${UMAMI_ORIGIN}/script.js`);
+	const upstream = await fetcher(`${UMAMI_ORIGIN}/script.js`).catch(() => null);
+	if (!upstream?.ok) {
+		return upstreamUnavailable();
+	}
 	return new Response(upstream.body, {
 		status: upstream.status,
 		headers: {
@@ -34,7 +46,10 @@ export const proxyUmamiEvent = async (
 		method: 'POST',
 		headers: umamiForwardHeaders(request.headers, clientAddress),
 		body: await request.text()
-	});
+	}).catch(() => null);
+	if (!upstream) {
+		return upstreamUnavailable();
+	}
 	return new Response(upstream.body, {
 		status: upstream.status,
 		headers: { 'content-type': upstream.headers.get('content-type') ?? 'application/json' }

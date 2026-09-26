@@ -18,6 +18,14 @@ export interface CompressionArgsOptions {
 
 const OUTPUT_ARGS = ['-movflags', '+faststart', '-f', 'mp4', '-y', OUTPUT_FILE];
 
+export const effectiveDuration = (duration: number, trim: TrimOptions): number => {
+	if (!trim.enabled) {
+		return duration;
+	}
+	const trimmedDuration = duration - trim.skipFirstSeconds - trim.skipLastSeconds;
+	return trimmedDuration > 0 ? trimmedDuration : duration;
+};
+
 export const buildInputArgs = (
 	inputPath: string,
 	duration: number,
@@ -28,11 +36,9 @@ export const buildInputArgs = (
 		args.push('-ss', trim.skipFirstSeconds.toString());
 	}
 	args.push('-i', inputPath);
-	if (trim.enabled && (trim.skipFirstSeconds > 0 || trim.skipLastSeconds > 0)) {
-		const targetDuration = duration - trim.skipFirstSeconds - trim.skipLastSeconds;
-		if (targetDuration > 0) {
-			args.push('-t', targetDuration.toString());
-		}
+	const outputDuration = effectiveDuration(duration, trim);
+	if (outputDuration < duration) {
+		args.push('-t', outputDuration.toString());
 	}
 	return args;
 };
@@ -55,10 +61,11 @@ export const buildCompressionArgs = (
 	metadata: VideoMetadata,
 	options: CompressionArgsOptions
 ): string[] => {
-	const settings = calculateCompressionSettings(options.targetSize, metadata, {
-		preserveOriginalFps: options.preserveOriginalFps,
-		muteSound: options.muteSound
-	});
+	const settings = calculateCompressionSettings(
+		options.targetSize,
+		{ ...metadata, duration: effectiveDuration(metadata.duration, options.trim) },
+		{ preserveOriginalFps: options.preserveOriginalFps, muteSound: options.muteSound }
+	);
 
 	const args = buildInputArgs(inputPath, metadata.duration, options.trim);
 

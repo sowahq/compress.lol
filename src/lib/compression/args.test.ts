@@ -3,6 +3,7 @@ import {
 	buildAudioOnlyArgs,
 	buildCompressionArgs,
 	buildInputArgs,
+	effectiveDuration,
 	OUTPUT_FILE,
 	type CompressionArgsOptions,
 	type TrimOptions
@@ -70,6 +71,31 @@ describe('buildInputArgs', () => {
 
 	it.each(cases)('$name', ({ trim, expected }) => {
 		expect(buildInputArgs(INPUT, 30, trim)).toEqual(expected);
+	});
+});
+
+describe('effectiveDuration', () => {
+	const cases = [
+		{ name: 'no trim', trim: NO_TRIM, expected: 30 },
+		{
+			name: 'trim values ignored when disabled',
+			trim: { enabled: false, skipFirstSeconds: 5, skipLastSeconds: 5 },
+			expected: 30
+		},
+		{
+			name: 'skip both',
+			trim: { enabled: true, skipFirstSeconds: 2.5, skipLastSeconds: 7.5 },
+			expected: 20
+		},
+		{
+			name: 'trim longer than the video falls back to the full duration',
+			trim: { enabled: true, skipFirstSeconds: 20, skipLastSeconds: 15 },
+			expected: 30
+		}
+	];
+
+	it.each(cases)('$name', ({ trim, expected }) => {
+		expect(effectiveDuration(30, trim)).toBe(expected);
 	});
 });
 
@@ -181,6 +207,15 @@ describe('buildCompressionArgs', () => {
 			metadata: video4k60,
 			options: options({ trim: { enabled: true, skipFirstSeconds: 3, skipLastSeconds: 2 } }),
 			check: (args) => expect(args.slice(0, 6)).toEqual(['-ss', '3', '-i', INPUT, '-t', '25'])
+		},
+		{
+			name: 'trim spends the budget on the kept duration only',
+			metadata: { ...video4k60, duration: 120, resolution: '1920x1080', fps: 30 },
+			options: options({
+				targetSize: 8 * MB,
+				trim: { enabled: true, skipFirstSeconds: 30, skipLastSeconds: 30 }
+			}),
+			check: (args) => expect(valueAfter(args, '-maxrate')).toBe('788k')
 		},
 		{
 			name: 'muted output spends the audio share on video',

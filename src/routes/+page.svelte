@@ -309,6 +309,11 @@
 		const file = selectedFile;
 		const metadata = videoMetadata;
 		const trim = currentTrim;
+		const audioOnly = audioOnlyMode;
+		const mute = muteSound;
+		const preserveFps = preserveOriginalFps;
+		const targetSize = selectedTarget.value;
+		const minimumBudget = minimumSize;
 		const job = { mode: processingMode(), target: selectedTarget.label, browser: browserFamily() };
 		const resolution = resolutionTier(metadata.resolution);
 
@@ -316,8 +321,8 @@
 			...job,
 			resolution,
 			fps: metadata.fps,
-			mute: muteSound,
-			preserve_fps: preserveOriginalFps,
+			mute,
+			preserve_fps: preserveFps,
 			trim: trimVideo
 		});
 
@@ -325,23 +330,23 @@
 			message = 'Mounting input file...';
 			return withMountedFile(instance, file, '/input', (inputPath) => {
 				const args = buildArgs(inputPath);
-				message = audioOnlyMode ? 'Processing audio only...' : 'Starting compression...';
+				message = audioOnly ? 'Processing audio only...' : 'Starting compression...';
 				console.log('FFmpeg args:', args);
 				return runFFmpeg(instance, args);
 			});
 		};
 
 		try {
-			const { data, attempts } = audioOnlyMode
+			const { data, attempts } = audioOnly
 				? {
 						data: await encodeWith((inputPath) =>
-							buildAudioOnlyArgs(inputPath, metadata.duration, trim, muteSound)
+							buildAudioOnlyArgs(inputPath, metadata.duration, trim, mute)
 						),
 						attempts: 1
 					}
 				: await encodeToTarget({
-						targetSize: selectedTarget.value,
-						minimumBudget: minimumSize,
+						targetSize,
+						minimumBudget,
 						encode: (sizeBudget, attempt) => {
 							encodeAttempt = attempt;
 							progress = 0;
@@ -350,8 +355,8 @@
 							return encodeWith((inputPath) =>
 								buildCompressionArgs(inputPath, metadata, {
 									targetSize: sizeBudget,
-									preserveOriginalFps,
-									muteSound,
+									preserveOriginalFps: preserveFps,
+									muteSound: mute,
 									threadCount: isChromium ? getOptimalThreadCount() : 1,
 									trim
 								})
@@ -365,10 +370,10 @@
 				...job,
 				seconds: Math.round((Date.now() - jobStartTime) / 1000),
 				reduction_percent: Math.round((1 - data.length / metadata.size) * 100),
-				target_met: data.length <= selectedTarget.value,
+				target_met: data.length <= targetSize,
 				attempts
 			});
-			message = audioOnlyMode
+			message = audioOnly
 				? 'Audio processing completed successfully!'
 				: 'Compression completed successfully!';
 		} catch (error) {

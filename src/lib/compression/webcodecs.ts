@@ -10,12 +10,8 @@ import {
 	type DiscardedTrack
 } from 'mediabunny';
 import { effectiveDuration, type CompressionArgsOptions } from './args';
-import {
-	calculateCompressionSettings,
-	detectMotion,
-	estimateBitrateKbps,
-	type VideoMetadata
-} from './settings';
+import { buildVideoMetadata, calculateCompressionSettings, type VideoMetadata } from './settings';
+import { isWebCodecsAvailable, WebCodecsUnsupportedError } from './webcodecs-support';
 
 export type BitrateMode = 'constant' | 'variable';
 
@@ -33,20 +29,7 @@ export interface WebCodecsPlan {
 	trimEnd: number;
 }
 
-export class WebCodecsUnsupportedError extends Error {
-	readonly reasons: string[];
-
-	constructor(reasons: string[]) {
-		super(`WebCodecs cannot process this file: ${reasons.join(', ')}`);
-		this.name = 'WebCodecsUnsupportedError';
-		this.reasons = reasons;
-	}
-}
-
 const KBPS = 1000;
-
-export const isWebCodecsAvailable = (): boolean =>
-	typeof globalThis.VideoEncoder === 'function' && typeof globalThis.VideoDecoder === 'function';
 
 export const buildWebCodecsPlan = (
 	metadata: VideoMetadata,
@@ -88,16 +71,14 @@ export const probeVideo = async (file: File): Promise<VideoMetadata | null> => {
 			track.getCodec(),
 			track.computePacketStats(FPS_SAMPLE_PACKETS)
 		]);
-		const bitrate = estimateBitrateKbps(file.size, duration);
-		return {
+		return buildVideoMetadata({
 			duration,
-			bitrate,
-			resolution: `${width}x${height}`,
+			width,
+			height,
 			codec: codec ?? 'unknown',
-			size: file.size,
 			fps: Math.round(stats.averagePacketRate),
-			hasMotion: detectMotion(bitrate, width, height)
-		};
+			size: file.size
+		});
 	} catch {
 		return null;
 	} finally {

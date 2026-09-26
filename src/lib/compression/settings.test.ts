@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	calculateCompressionSettings,
+	buildVideoMetadata,
 	calculateOptimalResolution,
 	detectMotion,
 	estimateBitrateKbps,
@@ -250,5 +251,28 @@ describe('detectMotion', () => {
 
 	it.each(cases)('$name', ({ bitrate, width, height, expected }) => {
 		expect(detectMotion(bitrate, width, height)).toBe(expected);
+	});
+});
+
+describe('buildVideoMetadata', () => {
+	it('derives bitrate, resolution and motion from the probe', () => {
+		expect(
+			buildVideoMetadata({
+				duration: 10,
+				width: 3840,
+				height: 2160,
+				codec: 'hevc',
+				fps: 60,
+				size: 10 * MB
+			})
+		).toEqual({
+			duration: 10,
+			bitrate: 8389,
+			resolution: '3840x2160',
+			codec: 'hevc',
+			size: 10 * MB,
+			fps: 60,
+			hasMotion: true
+		});
 	});
 });

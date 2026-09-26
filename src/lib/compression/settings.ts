@@ -85,6 +85,35 @@ export const detectMotion = (bitrateKbps: number, width: number, height: number)
 	return bitratePerPixel > 0.1 || bitrateKbps > 3000;
 };
 
+export interface VideoProbe {
+	duration: number;
+	width: number;
+	height: number;
+	codec: string;
+	fps: number;
+	size: number;
+}
+
+export const buildVideoMetadata = ({
+	duration,
+	width,
+	height,
+	codec,
+	fps,
+	size
+}: VideoProbe): VideoMetadata => {
+	const bitrate = estimateBitrateKbps(size, duration);
+	return {
+		duration,
+		bitrate,
+		resolution: `${width}x${height}`,
+		codec,
+		size,
+		fps,
+		hasMotion: detectMotion(bitrate, width, height)
+	};
+};
+
 export const calculateOptimalResolution = (
 	originalWidth: number,
 	originalHeight: number,

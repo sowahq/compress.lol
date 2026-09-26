@@ -17,13 +17,11 @@
 	} from '$lib/compression/ffmpeg';
 	import { minimumTargetSize, type VideoMetadata } from '$lib/compression/settings';
 	import { encodeToTarget } from '$lib/compression/target';
+	import { encodeWithWebCodecs, probeVideo, type BitrateMode } from '$lib/compression/webcodecs';
 	import {
-		encodeWithWebCodecs,
 		isWebCodecsAvailable,
-		probeVideo,
-		WebCodecsUnsupportedError,
-		type BitrateMode
-	} from '$lib/compression/webcodecs';
+		WebCodecsUnsupportedError
+	} from '$lib/compression/webcodecs-support';
 
 	type EngineId = 'ffmpeg' | 'webcodecs-vbr' | 'webcodecs-cbr';
 

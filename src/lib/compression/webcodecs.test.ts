@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { TrimOptions } from './args';
 import type { VideoMetadata } from './settings';
-import {
-	buildWebCodecsPlan,
-	encodeWithWebCodecs,
-	isWebCodecsAvailable,
-	WebCodecsUnsupportedError
-} from './webcodecs';
+import { buildWebCodecsPlan, encodeWithWebCodecs } from './webcodecs';
+import { isWebCodecsAvailable, WebCodecsUnsupportedError } from './webcodecs-support';
 
 const MB = 1024 * 1024;
 const NO_TRIM: TrimOptions = { enabled: false, skipFirstSeconds: 0, skipLastSeconds: 0 };

@@ -44,7 +44,7 @@
 	"how_perfect_for": "Parfait pour Discord, les réseaux sociaux, ou partout où vous avez besoin de fichiers vidéo plus petits !",
 	"file_size_limit_error": "La taille du fichier dépasse la limite de 5Go des navigateurs. Veuillez sélectionner un fichier plus petit.",
 	"select_valid_video": "Veuillez sélectionner un fichier vidéo valide.",
-	"footer_text": "Apache 2.0 Licensed | Built by <a class='text-primary underline' href='https://github.com/anhostfr'>Anhost</a> | Powered by FFmpeg.wasm | Source on <a class='text-primary underline' href='https://github.com/anhostfr/compress.lol'>GitHub</a>",
+	"footer_text": "Sous licence Apache 2.0 | Créé par <a class='text-primary underline' href='https://github.com/anhostfr'>Anhost</a> | Propulsé par FFmpeg.wasm | Code source sur <a class='text-primary underline' href='https://github.com/anhostfr/compress.lol'>GitHub</a>",
 	"footer_subtext": "Note : La compression se fait entièrement dans votre navigateur. Aucun fichier n'est téléversé sur un serveur.",
 	"advanced_settings": "Paramètres avancés",
 	"mute_sound": "Couper le son",

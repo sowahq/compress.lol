@@ -41,7 +41,6 @@
 	"select_valid_video": "يرجى تحديد ملف فيديو صالح.",
 	"footer_text": "مرخص بموجب Apache 2.0 | تم إنشاؤه بواسطة <a class=\"text-primary underline\" href=\"https://github.com/anhostfr\">Anhost</a> | مدعوم بواسطة FFmpeg.wasm | المصدر على <a class=\"text-primary underline\" href=\"https://github.com/anhostfr/compress.lol\">GitHub</a>",
 	"footer_subtext": "ملاحظة: يتم الضغط بالكامل في متصفحك. لا يتم رفع أي ملفات إلى أي خادم.",
-	"chromium_warning": "تم اكتشاف متصفح قائم على Chromium. تم تمكين المعالجة المتعددة الخيوط ولكن قد يكون الضغط أبطأ من المتوقع.",
 	"advanced_settings": "إعدادات متقدمة",
 	"mute_sound": "كتم الصوت",
 	"mute_sound_description": "قم بإزالة مسار الصوت تمامًا من الفيديو المضغوط لتقليل حجم الملف بشكل أكبر",

@@ -41,7 +41,6 @@
 	"select_valid_video": "Veuillez sélectionner un fichier vidéo valide.",
 	"footer_text": "Apache 2.0 Licensed | Built by <a class='text-primary underline' href='https://github.com/anhostfr'>Anhost</a> | Powered by FFmpeg.wasm | Source on <a class='text-primary underline' href='https://github.com/anhostfr/compress.lol'>GitHub</a>",
 	"footer_subtext": "Note : La compression se fait entièrement dans votre navigateur. Aucun fichier n'est téléversé sur un serveur.",
-	"chromium_warning": "Navigateur basé sur Chromium détecté. Le multithreading est activé mais la compression peut être plus lente que prévu.",
 	"advanced_settings": "Paramètres avancés",
 	"mute_sound": "Couper le son",
 	"mute_sound_description": "Supprimer complètement la piste audio de la vidéo compressée pour réduire davantage la taille du fichier",

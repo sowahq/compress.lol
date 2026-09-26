@@ -41,7 +41,6 @@
 	"select_valid_video": "Please select a valid video file.",
 	"footer_text": "Apache 2.0 Licensed | Built by <a class='text-primary underline' href='https://github.com/anhostfr'>Anhost</a> | Powered by FFmpeg.wasm | Source on <a class='text-primary underline' href='https://github.com/anhostfr/compress.lol'>GitHub</a>",
 	"footer_subtext": "Note: Compression happens entirely in your browser. No files are uploaded to any server.",
-	"chromium_warning": "Chromium-based browser detected. Multi-threading is enabled but compression may be slower than expected.",
 	"advanced_settings": "Advanced Settings",
 	"mute_sound": "Mute Sound",
 	"mute_sound_description": "Completely remove the audio track from the compressed video to further reduce file size",

@@ -41,7 +41,6 @@
 	"select_valid_video": "올바른 동영상 파일을 선택해 주세요.",
 	"footer_text": "Apache 2.0 라이선스 | 제작: <a class='text-primary underline' href='https://github.com/anhostfr'>Anhost</a> | FFmpeg.wasm 기반 | 소스 코드: <a class='text-primary underline' href='https://github.com/anhostfr/compress.lol'>GitHub</a>",
 	"footer_subtext": "참고: 압축은 전적으로 브라우저 내에서 이루어집니다. 어떤 파일도 서버로 업로드되지 않습니다.",
-	"chromium_warning": "Chromium 기반 브라우저가 감지되었습니다. 멀티스레딩이 활성화되어 있지만 압축 속도가 예상보다 느릴 수 있습니다.",
 	"advanced_settings": "고급 설정",
 	"mute_sound": "소리 제거",
 	"mute_sound_description": "압축된 동영상에서 오디오 트랙을 완전히 제거하여 파일 크기를 더 줄입니다",

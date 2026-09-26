@@ -737,14 +737,6 @@
 					</Alert.Root>
 				{/if}
 
-				{#if isChromium}
-					<Alert.Root class="mt-2">
-						<Alert.Description>
-							{m.chromium_warning()}
-						</Alert.Description>
-					</Alert.Root>
-				{/if}
-
 				<Button
 					onclick={compressVideo}
 					disabled={!selectedFile ||

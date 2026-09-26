@@ -97,7 +97,7 @@ Requires WebAssembly and SharedArrayBuffer support.
 
 ### File Size Limits
 
-- **Maximum file size**: 2GB (browser limitation)
+- **Maximum file size**: 5GB (browser limitation)
 
 ---
 

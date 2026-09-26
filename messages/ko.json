@@ -44,7 +44,7 @@
 	"how_perfect_for": "디스코드, 소셜 미디어 등 더 작은 동영상 파일이 필요한 모든 곳에 딱 맞습니다!",
 	"file_size_limit_error": "파일 크기가 브라우저 제한인 5GB를 초과합니다. 더 작은 파일을 선택해 주세요.",
 	"select_valid_video": "올바른 동영상 파일을 선택해 주세요.",
-	"footer_text": "Apache 2.0 라이선스 | 제작: <a class='text-primary underline' href='https://github.com/anhostfr'>Anhost</a> | FFmpeg.wasm 기반 | 소스 코드: <a class='text-primary underline' href='https://github.com/anhostfr/compress.lol'>GitHub</a>",
+	"footer_text": "Apache 2.0 라이선스 | 제작: <a class='text-primary underline' href='https://github.com/sowahq'>sowa</a> | WebCodecs 및 FFmpeg.wasm 기반 | 소스 코드: <a class='text-primary underline' href='https://github.com/sowahq/compress.lol'>GitHub</a>",
 	"footer_subtext": "참고: 압축은 전적으로 브라우저 내에서 이루어집니다. 어떤 파일도 서버로 업로드되지 않습니다.",
 	"advanced_settings": "고급 설정",
 	"mute_sound": "소리 제거",

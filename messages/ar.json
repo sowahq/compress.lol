@@ -44,7 +44,7 @@
 	"how_perfect_for": "مثالي لـ Discord أو وسائل التواصل الاجتماعي أو في أي مكان تحتاج فيه إلى ملفات فيديو أصغر!",
 	"file_size_limit_error": "حجم الملف يتجاوز حد المتصفح البالغ 5 جيجابايت. يرجى تحديد ملف أصغر.",
 	"select_valid_video": "يرجى تحديد ملف فيديو صالح.",
-	"footer_text": "مرخص بموجب Apache 2.0 | تم إنشاؤه بواسطة <a class=\"text-primary underline\" href=\"https://github.com/anhostfr\">Anhost</a> | مدعوم بواسطة FFmpeg.wasm | المصدر على <a class=\"text-primary underline\" href=\"https://github.com/anhostfr/compress.lol\">GitHub</a>",
+	"footer_text": "مرخص بموجب Apache 2.0 | تم إنشاؤه بواسطة <a class=\"text-primary underline\" href=\"https://github.com/sowahq\">sowa</a> | مدعوم بواسطة WebCodecs و FFmpeg.wasm | المصدر على <a class=\"text-primary underline\" href=\"https://github.com/sowahq/compress.lol\">GitHub</a>",
 	"footer_subtext": "ملاحظة: يتم الضغط بالكامل في متصفحك. لا يتم رفع أي ملفات إلى أي خادم.",
 	"advanced_settings": "إعدادات متقدمة",
 	"mute_sound": "كتم الصوت",

@@ -21,6 +21,7 @@ import {
 	toProgressPercent,
 	withMountedFile
 } from './ffmpeg';
+import { isChromiumBrowser } from '../browser';
 import { buildVideoMetadata, minimumTargetSize, type VideoMetadata } from './settings';
 import { encodeToTarget } from './target';
 import type { BitrateMode } from './webcodecs';
@@ -31,6 +32,7 @@ export const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024;
 const VIDEO_EXTENSIONS = /\.(mp4|avi|mov|wmv|flv|webm|mkv|m4v|3gp|ogv)$/i;
 const MATROSKA_TYPES = ['video/x-matroska', 'application/x-matroska'];
 const AUDIO_ONLY_FALLBACK = 'audio_only';
+const ENGINE_SETUP_FAILED = 'engine_setup_failed';
 
 export type FileValidation = 'ok' | 'too_large' | 'unsupported_type';
 
@@ -144,25 +146,18 @@ export interface CompressorDependencies {
 	threadCount: () => number;
 }
 
-const isChromium = (): boolean => {
-	try {
-		return 'userAgentData' in globalThis.navigator;
-	} catch {
-		return false;
-	}
-};
-
 export const browserDependencies: CompressorDependencies = {
 	loadWebCodecs: () => import('./webcodecs'),
 	createFFmpeg: () => new FFmpeg(),
 	loadFFmpegCore: (instance) => loadFFmpegCore(instance),
 	isWebCodecsAvailable,
-	threadCount: () => (isChromium() ? optimalThreadCount() : 1)
+	threadCount: () => (isChromiumBrowser() ? optimalThreadCount() : 1)
 };
 
 export interface Compressor {
 	analyze: (file: File) => Promise<VideoAnalysis | null>;
 	compress: (request: CompressionRequest) => Promise<CompressionOutcome>;
+	dispose: () => Promise<void>;
 }
 
 export const createCompressor = (
@@ -317,17 +312,20 @@ export const createCompressor = (
 			});
 		};
 
-		const encoder = audioOnly
-			? null
-			: request.engine
-				? forcedEncoder(request.engine)
-				: automaticEncoder();
-
-		const engine = (): Engine => encoder?.engine ?? 'ffmpeg';
-		const fallbackReason = (): string => encoder?.fallbackReason ?? AUDIO_ONLY_FALLBACK;
+		let encoder: FallbackEncoder | null = null;
+		const engine = (): Engine =>
+			encoder?.engine ?? (audioOnly ? 'ffmpeg' : (request.engine ?? 'webcodecs'));
+		const fallbackReason = (): string =>
+			encoder?.fallbackReason ?? (audioOnly ? AUDIO_ONLY_FALLBACK : ENGINE_SETUP_FAILED);
 
 		try {
-			const { data, attempts } = !encoder
+			const selected = audioOnly
+				? null
+				: request.engine
+					? forcedEncoder(request.engine)
+					: automaticEncoder();
+			encoder = selected;
+			const { data, attempts } = !selected
 				? {
 						data: await (async () => {
 							events.onEncodeStart?.({ engine: 'ffmpeg', attempt: 1 });
@@ -342,8 +340,8 @@ export const createCompressor = (
 						minimumBudget: requiredTargetSize(metadata, trim, request.muteSound),
 						encode: (sizeBudget, current) => {
 							attempt = current;
-							events.onEncodeStart?.({ engine: encoder.engine, attempt: current });
-							return encoder.encode(sizeBudget);
+							events.onEncodeStart?.({ engine: selected.engine, attempt: current });
+							return selected.encode(sizeBudget);
 						}
 					});
 			events.onStatus?.(
@@ -367,5 +365,5 @@ export const createCompressor = (
 		}
 	};
 
-	return { analyze, compress };
+	return { analyze, compress, dispose: resetFFmpeg };
 };

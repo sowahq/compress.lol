@@ -127,6 +127,7 @@ const createHarness = ({
 		onFFmpegLoadError: vi.fn()
 	};
 	return {
+		dependencies,
 		compressor: createCompressor(events, dependencies),
 		events,
 		ffmpegInstances,
@@ -400,6 +401,42 @@ describe('createCompressor compress', () => {
 
 		expect(outcome.engine).toBe('ffmpeg');
 		expect(harness.encodeWithWebCodecs).not.toHaveBeenCalled();
+	});
+
+	it('reports engine setup failures with the planned engine', async () => {
+		const harness = createHarness();
+		const broken = createCompressor(
+			{},
+			{
+				...harness.dependencies,
+				isWebCodecsAvailable: () => {
+					throw new Error('navigator unavailable');
+				}
+			}
+		);
+
+		const error = await broken
+			.compress(request(videoFile(), readable))
+			.catch((reason: unknown) => reason);
+
+		expect(error).toBeInstanceOf(CompressionJobError);
+		expect(error).toMatchObject({ engine: 'webcodecs', fallbackReason: 'engine_setup_failed' });
+	});
+
+	it('terminates the loaded ffmpeg worker on dispose', async () => {
+		const harness = createHarness({ probed: null, ffmpeg: { probeLog: AVI_PROBE_LOG } });
+
+		await harness.compressor.analyze(videoFile('a.avi'));
+		await harness.compressor.dispose();
+
+		expect(harness.ffmpegInstances[0].terminate).toHaveBeenCalledOnce();
+	});
+
+	it('does nothing on dispose when ffmpeg was never loaded', async () => {
+		const harness = createHarness();
+
+		await expect(harness.compressor.dispose()).resolves.toBeUndefined();
+		expect(harness.ffmpegInstances).toHaveLength(0);
 	});
 
 	it('forwards the requested bitrate mode to WebCodecs', async () => {

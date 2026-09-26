@@ -114,25 +114,6 @@ export const buildVideoMetadata = ({
 	};
 };
 
-export const calculateOptimalResolution = (
-	originalWidth: number,
-	originalHeight: number,
-	maxWidth: number
-): string => {
-	if (originalWidth <= maxWidth) {
-		return `${originalWidth}x${originalHeight}`;
-	}
-
-	const aspectRatio = originalWidth / originalHeight;
-	const newWidth = maxWidth;
-	const newHeight = Math.round(newWidth / aspectRatio);
-
-	const evenWidth = newWidth % 2 === 0 ? newWidth : newWidth - 1;
-	const evenHeight = newHeight % 2 === 0 ? newHeight : newHeight - 1;
-
-	return `${evenWidth}x${evenHeight}`;
-};
-
 export const fitWithinLongestEdge = (resolution: string, maxEdge: number): string => {
 	const [width, height] = resolution.split('x').map(Number);
 	const scale = maxEdge / Math.max(width, height);
@@ -141,7 +122,7 @@ export const fitWithinLongestEdge = (resolution: string, maxEdge: number): strin
 	}
 	const toEven = (value: number): number => {
 		const scaled = Math.round(value * scale);
-		return scaled - (scaled % 2);
+		return Math.max(2, scaled - (scaled % 2));
 	};
 	return `${toEven(width)}x${toEven(height)}`;
 };
@@ -157,7 +138,7 @@ export const calculateCompressionSettings = (
 	);
 	const ladder = ladderStep(videoBitrate);
 
-	let resolution = metadata.resolution;
+	let tierEdge = Infinity;
 	let crf = 23;
 	const preset = 'veryfast';
 	const tune = 'film';
@@ -166,20 +147,12 @@ export const calculateCompressionSettings = (
 	let targetFps = metadata.fps;
 	let fpsCap = metadata.fps;
 
-	const [width, height] = metadata.resolution.split('x').map(Number);
-
 	if (targetSize <= 8 * 1024 * 1024) {
-		const maxWidth = metadata.hasMotion ? 1024 : 854;
-		if (width > maxWidth) {
-			resolution = calculateOptimalResolution(width, height, maxWidth);
-		}
+		tierEdge = metadata.hasMotion ? 1024 : 854;
 		crf = metadata.hasMotion ? 18 : 26;
 		fpsCap = 24;
 	} else if (targetSize <= 25 * 1024 * 1024) {
-		const maxWidth = metadata.hasMotion ? 1440 : 1280;
-		if (width > maxWidth) {
-			resolution = calculateOptimalResolution(width, height, maxWidth);
-		}
+		tierEdge = metadata.hasMotion ? 1440 : 1280;
 		crf = metadata.hasMotion ? 16 : 24;
 		fpsCap = 30;
 	} else if (targetSize <= 50 * 1024 * 1024) {
@@ -190,7 +163,7 @@ export const calculateCompressionSettings = (
 		fpsCap = 30;
 	}
 
-	resolution = fitWithinLongestEdge(resolution, ladder.maxEdge);
+	const resolution = fitWithinLongestEdge(metadata.resolution, Math.min(tierEdge, ladder.maxEdge));
 
 	if (!preserveOriginalFps) {
 		targetFps = Math.min(targetFps, fpsCap, ladder.fpsCap);

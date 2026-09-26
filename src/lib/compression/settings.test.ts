@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
 	calculateCompressionSettings,
 	buildVideoMetadata,
-	calculateOptimalResolution,
 	detectMotion,
 	estimateBitrateKbps,
 	fitWithinLongestEdge,
@@ -37,7 +36,8 @@ describe('fitWithinLongestEdge', () => {
 		{ name: 'slightly above the cap', input: '2000x1125', expected: '1920x1080' },
 		{ name: 'exactly at the cap', input: '1920x1080', expected: '1920x1080' },
 		{ name: 'below the cap is never upscaled', input: '1280x720', expected: '1280x720' },
-		{ name: 'odd dimensions below the cap are kept', input: '1279x719', expected: '1279x719' }
+		{ name: 'odd dimensions below the cap are kept', input: '1279x719', expected: '1279x719' },
+		{ name: 'a very thin side never drops below 2 px', input: '3840x2', expected: '1920x2' }
 	];
 
 	it.each(cases)('$name', ({ input, expected }) => {
@@ -56,21 +56,6 @@ describe('fitWithinLongestEdge', () => {
 			}
 		}
 	});
-});
-
-describe('calculateOptimalResolution', () => {
-	const cases = [
-		{ width: 3840, height: 2160, maxWidth: 1440, expected: '1440x810' },
-		{ width: 3840, height: 2160, maxWidth: 1024, expected: '1024x576' },
-		{ width: 1280, height: 720, maxWidth: 1440, expected: '1280x720' }
-	];
-
-	it.each(cases)(
-		'$width x $height capped at $maxWidth',
-		({ width, height, maxWidth, expected }) => {
-			expect(calculateOptimalResolution(width, height, maxWidth)).toBe(expected);
-		}
-	);
 });
 
 describe('calculateCompressionSettings', () => {
@@ -131,11 +116,39 @@ describe('calculateCompressionSettings', () => {
 			expected: { resolution: '1080x1920' }
 		},
 		{
-			name: 'portrait 4K to 25 MB ends within the cap',
+			name: 'portrait 4K to 25 MB uses the 1440 px tier on its longest edge',
 			targetSize: 25 * MB,
 			metadata: video({ resolution: '2160x3840' }),
 			preserveOriginalFps: false,
-			expected: { resolution: '1080x1920' }
+			expected: { resolution: '810x1440', crf: 16, targetFps: 30 }
+		},
+		{
+			name: 'portrait 4K to 8 MB uses the 1024 px tier on its longest edge',
+			targetSize: 8 * MB,
+			metadata: video({ resolution: '2160x3840' }),
+			preserveOriginalFps: false,
+			expected: { resolution: '576x1024', crf: 18, targetFps: 24 }
+		},
+		{
+			name: 'a portrait 1080p video to 25 MB is scaled down like its landscape twin',
+			targetSize: 25 * MB,
+			metadata: video({ resolution: '1080x1920' }),
+			preserveOriginalFps: false,
+			expected: { resolution: '810x1440' }
+		},
+		{
+			name: 'an extremely tall video keeps a short side of at least 2 px',
+			targetSize: 8 * MB,
+			metadata: video({ resolution: '4x3840', hasMotion: false }),
+			preserveOriginalFps: false,
+			expected: { resolution: '2x854' }
+		},
+		{
+			name: 'a landscape 1080p video to 25 MB uses the 1440 px tier',
+			targetSize: 25 * MB,
+			metadata: video({ resolution: '1920x1080' }),
+			preserveOriginalFps: false,
+			expected: { resolution: '1440x810' }
 		},
 		{
 			name: 'low motion 720p is left untouched',

@@ -392,6 +392,7 @@ describe('loadFFmpegCore', () => {
 		expect(contents.get(config?.wasmURL ?? '')).toBe('core.wasm');
 		expect(contents.get(config?.workerURL ?? '')).toBe('worker.js');
 		const created = createObjectURL.mock.results.map((result) => result.value);
+		expect(created).toHaveLength(3);
 		expect(revokeObjectURL.mock.calls.map(([url]) => url).sort()).toEqual([...created].sort());
 	});
 

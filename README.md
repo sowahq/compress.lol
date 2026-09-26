@@ -84,9 +84,7 @@ The app uses FFmpeg.wasm for video processing:
 
 ### Adding Languages
 
-1. Create new message files in `src/lib/paraglide/messages/`
-2. Update language configuration
-3. Add language selector option
+See [Translations in CONTRIBUTING.md](CONTRIBUTING.md#translations). `npm test` checks that every language has all the texts.
 
 ---
 

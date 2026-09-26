@@ -42,6 +42,15 @@ npm run build    # production build
 - For UI or compression changes, try a real video in at least one browser and say which one in the pull request.
 - Use the existing UI components and Tailwind theme tokens; do not hardcode colours or pixel sizes.
 
+## Translations
+
+Texts live in `messages/<locale>.json`, with English (`en.json`) as the reference. The language selector picks up new languages automatically.
+
+- **Fix or complete a language**: edit its file. Keep every key, keep placeholders such as `{minimum}` unchanged, and keep the `<a>` links in `footer_text`.
+- **Add a language**: add its code to `locales` in `project.inlang/settings.json`, copy `messages/en.json` to `messages/<code>.json` and translate the values.
+
+`npm test` fails if a language misses a key, has an empty text, or changes a placeholder or a link. Brand names (Discord, WhatsApp, Gmail) stay as they are.
+
 ## Commits and pull requests
 
 - One topic per pull request.

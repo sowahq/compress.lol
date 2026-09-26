@@ -1,0 +1,27 @@
+name: Translation
+description: Report a wrong translation or offer a new language
+labels: [translation]
+body:
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      placeholder: German (de)
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Request
+      options:
+        - Fix an existing translation
+        - Add a new language
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Which text is wrong and what it should say, or whether you can translate the whole file yourself (see CONTRIBUTING.md).
+    validations:
+      required: true

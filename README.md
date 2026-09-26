@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="static/brand/mark-dark.svg">
+    <img src="static/brand/mark-light.svg" alt="compress.lol logo" width="96" height="96">
+  </picture>
+</p>
+
 # compress.lol
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)

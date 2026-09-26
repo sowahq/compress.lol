@@ -196,7 +196,8 @@
 	};
 
 	const compressVideo = async (): Promise<void> => {
-		if (!selectedFile || !analysis || !target || isAnalyzing || isTargetUnreachable) return;
+		if (!selectedFile || !analysis || isAnalyzing || isTargetUnreachable) return;
+		if (!target && !audioOnlyMode) return;
 
 		isProcessing = true;
 		encodeAttempt = 0;
@@ -204,8 +205,12 @@
 		resetProgress();
 		const jobStartTime = startTime;
 		const metadata = analysis.metadata;
-		const targetSize = target.bytes;
-		const job = { mode: processingMode(), target: target.analyticsId, browser: browserFamily() };
+		const targetSize = target?.bytes ?? analysis.metadata.size;
+		const job = {
+			mode: processingMode(),
+			target: target?.analyticsId ?? 'none',
+			browser: browserFamily()
+		};
 		const resolution = resolutionTier(metadata.resolution);
 
 		trackEvent('compression_started', {
@@ -231,8 +236,8 @@
 				data: outcome.data,
 				fileName: selectedFile.name,
 				originalSize: metadata.size,
-				fileTag: target.fileTag,
-				targetId: target.analyticsId,
+				fileTag: target?.fileTag ?? 'audio',
+				targetId: job.target,
 				targetMet: outcome.targetMet,
 				audioOnly: audioOnlyMode,
 				muteSound
@@ -296,7 +301,9 @@
 		try {
 			localStorage.setItem(TARGET_STORAGE_KEY, serializeSelection(selection));
 			localStorage.removeItem(LEGACY_TARGET_STORAGE_KEY);
-		} catch (e) {}
+		} catch (error) {
+			console.warn('Could not save the target preference:', error);
+		}
 	};
 </script>
 
@@ -410,7 +417,7 @@
 					onclick={compressVideo}
 					disabled={!selectedFile ||
 						!videoMetadata ||
-						!target ||
+						(!target && !audioOnlyMode) ||
 						isAnalyzing ||
 						isProcessing ||
 						isTargetUnreachable}

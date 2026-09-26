@@ -30,7 +30,9 @@
 	const triggerLabel = $derived(
 		isCustom ? m.target_custom() : (resolveTarget(selection)?.label ?? m.select_target_size())
 	);
-	const customInvalid = $derived(isCustom && !isValidCustomMb(selection.customMb));
+	const customInvalid = $derived(
+		isCustom && selection.customMb !== null && !isValidCustomMb(selection.customMb)
+	);
 
 	const selectPreset = (presetId: string | undefined): void => {
 		if (presetId) onchange({ ...selection, presetId });

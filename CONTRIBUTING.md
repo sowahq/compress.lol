@@ -47,9 +47,9 @@ npm run build    # production build
 Texts live in `messages/<locale>.json`, with English (`en.json`) as the reference. The language selector picks up new languages automatically.
 
 - **Fix or complete a language**: edit its file. Keep every key, keep placeholders such as `{minimum}` unchanged, and keep the `<a>` links in `footer_text`.
-- **Add a language**: add its code to `locales` in `project.inlang/settings.json`, copy `messages/en.json` to `messages/<code>.json` and translate the values.
+- **Add a language**: add its code to `locales` in `project.inlang/settings.json`, copy `messages/en.json` to `messages/<code>.json` and translate every value. Right-to-left languages (Arabic, Hebrew, Persian...) are detected from the language code in `src/lib/i18n.ts`.
 
-`npm test` fails if a language misses a key, has an empty text, or changes a placeholder or a link. Brand names (Discord, WhatsApp, Gmail) stay as they are.
+`npm test` fails if a language misses a key, leaves a text in English, has an empty or non-text value, or changes a placeholder or a link (its URL or markup). The product name compress.lol stays as it is; other names such as Discord may follow your language's grammar.
 
 ## Commits and pull requests
 

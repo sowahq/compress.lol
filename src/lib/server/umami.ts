@@ -1,5 +1,3 @@
-import { error } from '@sveltejs/kit';
-
 const UMAMI_ORIGIN = 'https://cloud.umami.is';
 const FORWARDED_HEADERS = [
 	'content-type',
@@ -22,11 +20,10 @@ export const umamiForwardHeaders = (source: Headers, clientAddress: string): Hea
 	return headers;
 };
 
-export const requireUmami = (websiteId: string | undefined): void => {
-	if (!websiteId) {
-		error(404, 'Not found');
-	}
-};
+const UMAMI_ROUTE = '/stats';
+
+export const umamiRouteBlocked = (pathname: string, websiteId: string | undefined): boolean =>
+	!websiteId && (pathname === UMAMI_ROUTE || pathname.startsWith(`${UMAMI_ROUTE}/`));
 
 const upstreamUnavailable = (): Response =>
 	new Response(null, { status: 502, headers: { 'cache-control': 'no-store' } });

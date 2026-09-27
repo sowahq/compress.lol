@@ -1,24 +1,44 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isHttpError } from '@sveltejs/kit';
-import { proxyUmamiEvent, proxyUmamiScript, requireUmami, umamiForwardHeaders } from './umami';
+import { proxyUmamiEvent, proxyUmamiScript, umamiRouteBlocked, umamiForwardHeaders } from './umami';
 
-describe('requireUmami', () => {
+describe('umamiRouteBlocked', () => {
+	const id = '7dc6161d-a41d-454a-851d-79e9e89f4bd3';
 	const cases = [
-		{ name: 'an unset website id', websiteId: undefined },
-		{ name: 'an empty website id', websiteId: '' }
+		{
+			name: 'the script without a website id',
+			pathname: '/stats/s.js',
+			websiteId: undefined,
+			expected: true
+		},
+		{
+			name: 'the event endpoint with an empty id',
+			pathname: '/stats/api/send',
+			websiteId: '',
+			expected: true
+		},
+		{
+			name: 'the bare route without an id',
+			pathname: '/stats',
+			websiteId: undefined,
+			expected: true
+		},
+		{
+			name: 'the script with a website id',
+			pathname: '/stats/s.js',
+			websiteId: id,
+			expected: false
+		},
+		{ name: 'the home page without an id', pathname: '/', websiteId: undefined, expected: false },
+		{
+			name: 'a route that only shares the prefix',
+			pathname: '/statsx',
+			websiteId: undefined,
+			expected: false
+		}
 	];
 
-	it.each(cases)('answers 404 for $name', ({ websiteId }) => {
-		try {
-			requireUmami(websiteId);
-			expect.unreachable();
-		} catch (thrown) {
-			expect(isHttpError(thrown, 404)).toBe(true);
-		}
-	});
-
-	it('lets requests through when a website id is set', () => {
-		expect(() => requireUmami('7dc6161d-a41d-454a-851d-79e9e89f4bd3')).not.toThrow();
+	it.each(cases)('$name', ({ pathname, websiteId, expected }) => {
+		expect(umamiRouteBlocked(pathname, websiteId)).toBe(expected);
 	});
 });
 

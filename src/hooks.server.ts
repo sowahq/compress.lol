@@ -1,7 +1,9 @@
 import type { Handle } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { paraglideMiddleware } from '$lib/paraglide/server';
+import { env } from '$env/dynamic/public';
 import { textDirection } from '$lib/i18n';
+import { umamiRouteBlocked } from '$lib/server/umami';
 
 const handleParaglide: Handle = ({ event, resolve }) =>
 	paraglideMiddleware(event.request, ({ request, locale }) => {
@@ -23,4 +25,9 @@ const handleFFmpeg: Handle = async ({ event, resolve }) => {
 	return response;
 };
 
-export const handle: Handle = sequence(handleParaglide, handleFFmpeg);
+const handleUmami: Handle = ({ event, resolve }) =>
+	umamiRouteBlocked(event.url.pathname, env.PUBLIC_UMAMI_WEBSITE_ID)
+		? new Response(null, { status: 404 })
+		: resolve(event);
+
+export const handle: Handle = sequence(handleUmami, handleParaglide, handleFFmpeg);

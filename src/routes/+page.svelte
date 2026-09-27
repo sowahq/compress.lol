@@ -51,6 +51,7 @@
 		type Browser,
 		type ProcessingMode
 	} from '$lib/analytics';
+	import { carriesFiles, nextDragDepth } from '$lib/file-drop';
 
 	let ffmpegLoading = $state(false);
 	let isAnalyzing = $state(false);
@@ -60,6 +61,8 @@
 	let progress = $state(0);
 	let encodeAttempt = $state(0);
 	let selectedFile = $state<File | null>(null);
+	let fileInput = $state<HTMLInputElement | null>(null);
+	let dragDepth = $state(0);
 	let result = $state<CompressionResult | null>(null);
 	let errorMessage = $state('');
 	let message = $state('Initializing...');
@@ -169,10 +172,7 @@
 		}
 	};
 
-	const handleFileSelect = (event: Event): void => {
-		const input = event.currentTarget;
-		if (!(input instanceof HTMLInputElement)) return;
-		const file = input.files?.[0];
+	const selectFile = (file: File | undefined): boolean => {
 		const validation = file ? validateVideoFile(file) : 'unsupported_type';
 
 		if (!file || validation === 'unsupported_type') {
@@ -180,19 +180,59 @@
 				trackEvent('file_rejected', { reason: 'unsupported_type' });
 			}
 			errorMessage = m.select_valid_video();
-			return;
+			return false;
 		}
 		if (validation === 'too_large') {
 			trackEvent('file_rejected', { reason: 'too_large' });
 			errorMessage = m.file_size_limit_error();
-			input.value = '';
-			return;
+			return false;
 		}
 
 		selectedFile = file;
 		errorMessage = '';
 		result = null;
 		analyzeFile(file);
+		return true;
+	};
+
+	const handleFileSelect = (event: Event): void => {
+		const input = event.currentTarget;
+		if (!(input instanceof HTMLInputElement)) return;
+		if (!selectFile(input.files?.[0])) {
+			input.value = '';
+		}
+	};
+
+	const handleDragEnter = (event: DragEvent): void => {
+		if (!carriesFiles(event.dataTransfer?.types)) return;
+		event.preventDefault();
+		dragDepth = nextDragDepth(dragDepth, 'enter');
+	};
+
+	const handleDragOver = (event: DragEvent): void => {
+		if (!carriesFiles(event.dataTransfer?.types)) return;
+		event.preventDefault();
+		if (event.dataTransfer) {
+			event.dataTransfer.dropEffect = isProcessing ? 'none' : 'copy';
+		}
+	};
+
+	const handleDragLeave = (event: DragEvent): void => {
+		if (!carriesFiles(event.dataTransfer?.types)) return;
+		dragDepth = nextDragDepth(dragDepth, 'leave');
+	};
+
+	const handleDrop = (event: DragEvent): void => {
+		if (!carriesFiles(event.dataTransfer?.types)) return;
+		event.preventDefault();
+		dragDepth = nextDragDepth(dragDepth, 'drop');
+		const file = event.dataTransfer?.files[0];
+		if (isProcessing || !file) return;
+		if (selectFile(file) && fileInput) {
+			const selection = new DataTransfer();
+			selection.items.add(file);
+			fileInput.files = selection.files;
+		}
 	};
 
 	const compressVideo = async (): Promise<void> => {
@@ -329,6 +369,25 @@
 	<meta name="twitter:image" content="https://compress.lol/og.png" />
 </svelte:head>
 
+<svelte:window
+	ondragenter={handleDragEnter}
+	ondragover={handleDragOver}
+	ondragleave={handleDragLeave}
+	ondrop={handleDrop}
+/>
+
+{#if dragDepth > 0 && !isProcessing}
+	<div
+		class="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 backdrop-blur-sm"
+	>
+		<div
+			class="rounded-lg border-4 border-dashed border-primary px-10 py-8 text-center text-2xl font-bold"
+		>
+			{m.drop_video_here()}
+		</div>
+	</div>
+{/if}
+
 <div class="container mx-auto max-w-4xl p-6">
 	<div class="mb-2 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
 		<h1 class="mb-2 text-4xl font-bold">{m.app_title()}</h1>
@@ -365,6 +424,7 @@
 					<Label for="video-upload">{m.choose_video_file()}</Label>
 					<Input
 						id="video-upload"
+						bind:ref={fileInput}
 						type="file"
 						accept="video/*"
 						onchange={handleFileSelect}

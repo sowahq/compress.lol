@@ -1,5 +1,3 @@
-import { canEncodeAudio } from 'mediabunny';
-
 const REORDERING_PROBE_CODEC = 'avc1.640028';
 const REORDERING_PROBE_SIZE = { width: 320, height: 240 };
 const REORDERING_PROBE_FRAMES = 5;
@@ -101,14 +99,17 @@ export const prepareVideoEncoder = (): Promise<void> =>
 		}
 	);
 
+/**
+ * Registers the WebAssembly AAC encoder for every browser. Native encoders are not used
+ * because they do not honour low bitrates: Chrome on macOS fails with "Encoding error." or
+ * silently encodes at about 128 kbps below 72 kbps, which breaks small targets.
+ */
 export const prepareAacEncoder = (): Promise<void> =>
 	cacheUnlessRejected(
 		() => aacEncoderPreparation,
 		(value) => (aacEncoderPreparation = value),
 		async () => {
-			if (!(await canEncodeAudio('aac'))) {
-				const { registerAacEncoder } = await import('@mediabunny/aac-encoder');
-				registerAacEncoder();
-			}
+			const { registerAacEncoder } = await import('@mediabunny/aac-encoder');
+			registerAacEncoder();
 		}
 	);

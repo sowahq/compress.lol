@@ -1,5 +1,19 @@
-import { describe, expect, it } from 'vitest';
-import { usesFrameReordering, withRealtimeLatency } from './webcodecs-compat';
+import { describe, expect, it, vi } from 'vitest';
+import { prepareAacEncoder, usesFrameReordering, withRealtimeLatency } from './webcodecs-compat';
+
+const { registerAacEncoder } = vi.hoisted(() => ({ registerAacEncoder: vi.fn() }));
+
+vi.mock('@mediabunny/aac-encoder', () => ({ registerAacEncoder }));
+vi.mock('mediabunny', () => ({ canEncodeAudio: async () => true }));
+
+describe('prepareAacEncoder', () => {
+	it('registers the WebAssembly AAC encoder once, even when a native AAC encoder exists', async () => {
+		await Promise.all([prepareAacEncoder(), prepareAacEncoder()]);
+		await prepareAacEncoder();
+
+		expect(registerAacEncoder).toHaveBeenCalledTimes(1);
+	});
+});
 
 describe('usesFrameReordering', () => {
 	const cases = [

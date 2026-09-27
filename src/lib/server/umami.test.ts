@@ -1,5 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
-import { proxyUmamiEvent, proxyUmamiScript, umamiForwardHeaders } from './umami';
+import { isHttpError } from '@sveltejs/kit';
+import { proxyUmamiEvent, proxyUmamiScript, requireUmami, umamiForwardHeaders } from './umami';
+
+describe('requireUmami', () => {
+	const cases = [
+		{ name: 'an unset website id', websiteId: undefined },
+		{ name: 'an empty website id', websiteId: '' }
+	];
+
+	it.each(cases)('answers 404 for $name', ({ websiteId }) => {
+		try {
+			requireUmami(websiteId);
+			expect.unreachable();
+		} catch (thrown) {
+			expect(isHttpError(thrown, 404)).toBe(true);
+		}
+	});
+
+	it('lets requests through when a website id is set', () => {
+		expect(() => requireUmami('7dc6161d-a41d-454a-851d-79e9e89f4bd3')).not.toThrow();
+	});
+});
 
 describe('umamiForwardHeaders', () => {
 	it('keeps only the headers Umami needs and sets the client address', () => {

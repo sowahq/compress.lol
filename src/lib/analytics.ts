@@ -1,6 +1,5 @@
 import type { Engine } from './compression/engine';
 
-export const UMAMI_WEBSITE_ID = '7dc6161d-a41d-454a-851d-79e9e89f4bd3';
 export const UMAMI_SCRIPT_URL = '/stats/s.js';
 export const UMAMI_HOST_URL = '/stats';
 

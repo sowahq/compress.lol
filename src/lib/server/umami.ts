@@ -1,3 +1,5 @@
+import { error } from '@sveltejs/kit';
+
 const UMAMI_ORIGIN = 'https://cloud.umami.is';
 const FORWARDED_HEADERS = [
 	'content-type',
@@ -18,6 +20,12 @@ export const umamiForwardHeaders = (source: Headers, clientAddress: string): Hea
 	}
 	headers.set('x-forwarded-for', clientAddress);
 	return headers;
+};
+
+export const requireUmami = (websiteId: string | undefined): void => {
+	if (!websiteId) {
+		error(404, 'Not found');
+	}
 };
 
 const upstreamUnavailable = (): Response =>

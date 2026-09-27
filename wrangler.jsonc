@@ -7,6 +7,9 @@
 	"compatibility_flags": ["nodejs_compat"],
 	"workers_dev": true,
 	"preview_urls": false,
+	"vars": {
+		"PUBLIC_UMAMI_WEBSITE_ID": "7dc6161d-a41d-454a-851d-79e9e89f4bd3"
+	},
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"

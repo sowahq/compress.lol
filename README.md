@@ -6,7 +6,7 @@
 </h1>
 
 <p align="center">
-  Shrink any video to fit Discord, WhatsApp or email, 100% in your browser with WebCodecs and WebAssembly. Nothing is uploaded.
+  Shrink a video to fit Discord, WhatsApp or email. It is encoded in your browser with WebCodecs and WebAssembly, so the file never leaves your device.
 </p>
 
 <p align="center">
@@ -21,13 +21,13 @@
 
 ## Features
 
-- **Private by design**: the video is read and encoded on your device. No server upload, no account.
-- **Fast**: WebCodecs uses the hardware encoder of your GPU. ffmpeg.wasm takes over for formats and browsers WebCodecs cannot handle (AVI, MPEG-4 Part 2...).
-- **Hits the target**: the output is measured and re-encoded with a corrected budget when it is too large, so it lands under the size you picked.
+- **Private**: the video is read and encoded on your device. Nothing is uploaded and there is no account.
+- **Fast**: WebCodecs encodes on your GPU. ffmpeg.wasm takes over for formats and browsers WebCodecs cannot handle (AVI, MPEG-4 Part 2...).
+- **Hits the target**: the output is measured, and re-encoded with a corrected budget if it is too large.
 - **Platform presets**: Discord, Discord Nitro, WhatsApp, Gmail / Outlook, generic sizes, or any custom size from 1 to 2048 MB.
 - **Large files**: videos up to 5 GB, in MP4, MOV, MKV, WebM, AVI and more.
 - **Options**: drag and drop, trim the start or the end, mute the sound, keep the original frame rate, or keep the audio only.
-- **Five languages**: English, French, Polish, Korean and Arabic (right to left), with light, dark and Catppuccin themes.
+- **Five languages**: English, French, Polish, Korean and Arabic, with light, dark and Catppuccin themes.
 
 ## Benchmark
 
@@ -69,7 +69,7 @@ services:
 ```
 
 - **Serve it over HTTPS** (or open it on `localhost`). Browsers only enable WebCodecs and `SharedArrayBuffer` in a secure context, so a plain `http://` LAN address will not compress anything. Any reverse proxy with a certificate works (Caddy, Traefik, nginx).
-- **No analytics**: a self-hosted instance loads no tracking script and sends nothing anywhere.
+- **No analytics**: a self-hosted instance loads no tracking script and sends no data.
 - **Environment variables**: `PORT` (default `3000`) and `HOST` (default `0.0.0.0`).
 - **Build it yourself**: `docker build -t compress.lol .` from a clone of this repository.
 
@@ -89,11 +89,11 @@ The flow lives in `src/lib/compression/`, starting with `compressor.ts`. All siz
 
 ### Privacy
 
-Videos are never uploaded: analysis and encoding run in your browser. compress.lol counts anonymous usage events with [Umami](https://umami.is) (no cookies): for example the resolution tier, size and duration ranges, file extension, chosen target, engine used and whether the target was met. File names and contents are never sent.
+Videos are never uploaded. Analysis and encoding run in your browser. compress.lol counts anonymous usage events with [Umami](https://umami.is), without cookies: the resolution tier, size and duration ranges, file extension, chosen target, engine used and whether the target was met. File names and contents are never sent.
 
 ## Contributing
 
-Contributions are welcome: bug reports, new platform presets, translations and code. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the checks to run and the pull request conventions, and [Translations](CONTRIBUTING.md#translations) to add a language. This project follows a [code of conduct](CODE_OF_CONDUCT.md).
+Bug reports, new platform presets, translations and code are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the checks to run and the pull request conventions, and [Translations](CONTRIBUTING.md#translations) to add a language. This project follows a [code of conduct](CODE_OF_CONDUCT.md).
 
 ```bash
 npm ci             # install dependencies
@@ -119,7 +119,7 @@ compress.lol is open source under the [Apache License 2.0](LICENSE).
 - [Tailwind CSS](https://tailwindcss.com), [shadcn-svelte](https://www.shadcn-svelte.com) and [Bits UI](https://bits-ui.com): styling and UI components
 - [Lucide](https://lucide.dev): icons
 - [Catppuccin](https://catppuccin.com): color themes
-- [Umami](https://umami.is): privacy-friendly analytics
+- [Umami](https://umami.is): cookie-free analytics
 - [Cloudflare Workers](https://workers.cloudflare.com): hosting
 - [jsDelivr](https://www.jsdelivr.com) and [unpkg](https://unpkg.com): delivery of the ffmpeg.wasm core
 - [Contributor Covenant](https://www.contributor-covenant.org): code of conduct

@@ -197,7 +197,11 @@ describe('calculateCompressionSettings', () => {
 
 	it.each(cases)('$name', ({ targetSize, metadata, preserveOriginalFps, expected }) => {
 		expect(
-			calculateCompressionSettings(targetSize, metadata, { preserveOriginalFps, muteSound: false })
+			calculateCompressionSettings(targetSize, metadata, {
+				preserveOriginalFps,
+				muteSound: false,
+				engine: 'ffmpeg'
+			})
 		).toMatchObject(expected);
 	});
 
@@ -205,16 +209,34 @@ describe('calculateCompressionSettings', () => {
 		const metadata = video({ duration: 120, resolution: '1920x1080' });
 		const withSound = calculateCompressionSettings(8 * MB, metadata, {
 			preserveOriginalFps: false,
-			muteSound: false
+			muteSound: false,
+			engine: 'ffmpeg'
 		});
 		const muted = calculateCompressionSettings(8 * MB, metadata, {
 			preserveOriginalFps: false,
-			muteSound: true
+			muteSound: true,
+			engine: 'ffmpeg'
 		});
 
 		expect(parseInt(muted.videoBitrate)).toBe(
 			parseInt(withSound.videoBitrate) + parseInt(withSound.audioBitrate)
 		);
+	});
+
+	it('gives WebCodecs a larger share of the target than ffmpeg.wasm', () => {
+		const options = { preserveOriginalFps: false, muteSound: false };
+		const ffmpeg = calculateCompressionSettings(25 * MB, video({}), {
+			...options,
+			engine: 'ffmpeg'
+		});
+		const webcodecs = calculateCompressionSettings(25 * MB, video({}), {
+			...options,
+			engine: 'webcodecs'
+		});
+
+		expect(ffmpeg.videoBitrate).toBe('5205k');
+		expect(webcodecs.videoBitrate).toBe('6072k');
+		expect(webcodecs.resolution).toBe(ffmpeg.resolution);
 	});
 });
 
@@ -234,8 +256,15 @@ describe('minimumTargetSize', () => {
 			const minimum = minimumTargetSize(duration, hasMotion, muteSound);
 			const floor = MIN_VIDEO_BITRATE_KBPS + (muteSound ? 0 : MIN_AUDIO_BITRATE_KBPS);
 
-			expect(totalBitrateBudget(minimum, duration, hasMotion)).toBeGreaterThanOrEqual(floor);
-			expect(totalBitrateBudget(minimum, duration, hasMotion)).toBeLessThanOrEqual(floor + 1);
+			expect(totalBitrateBudget(minimum, duration, hasMotion, 'ffmpeg')).toBeGreaterThanOrEqual(
+				floor
+			);
+			expect(totalBitrateBudget(minimum, duration, hasMotion, 'ffmpeg')).toBeLessThanOrEqual(
+				floor + 1
+			);
+			expect(totalBitrateBudget(minimum, duration, hasMotion, 'webcodecs')).toBeGreaterThanOrEqual(
+				floor
+			);
 		}
 	);
 

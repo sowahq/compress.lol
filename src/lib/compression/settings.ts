@@ -1,3 +1,4 @@
+import type { Engine } from './engine';
 import { MEGABYTE } from './presets';
 
 export const MAX_ENCODE_EDGE = 1920;
@@ -41,9 +42,16 @@ export interface CompressionSettings {
 export interface EncodingOptions {
 	preserveOriginalFps: boolean;
 	muteSound: boolean;
+	engine: Engine;
 }
 
-const encodingEfficiency = (hasMotion: boolean): number => (hasMotion ? 0.8 : 0.85);
+const ENCODING_EFFICIENCY: Record<Engine, { motion: number; still: number }> = {
+	webcodecs: { motion: 0.93, still: 0.95 },
+	ffmpeg: { motion: 0.8, still: 0.85 }
+};
+
+const encodingEfficiency = (engine: Engine, hasMotion: boolean): number =>
+	hasMotion ? ENCODING_EFFICIENCY[engine].motion : ENCODING_EFFICIENCY[engine].still;
 
 const requiredBitrateKbps = (muteSound: boolean): number =>
 	MIN_VIDEO_BITRATE_KBPS + (muteSound ? 0 : MIN_AUDIO_BITRATE_KBPS);
@@ -51,15 +59,19 @@ const requiredBitrateKbps = (muteSound: boolean): number =>
 export const totalBitrateBudget = (
 	targetSize: number,
 	duration: number,
-	hasMotion: boolean
-): number => Math.round(((targetSize * 8) / duration / 1000) * encodingEfficiency(hasMotion));
+	hasMotion: boolean,
+	engine: Engine
+): number =>
+	Math.round(((targetSize * 8) / duration / 1000) * encodingEfficiency(engine, hasMotion));
 
 export const minimumTargetSize = (
 	duration: number,
 	hasMotion: boolean,
 	muteSound: boolean
 ): number =>
-	Math.ceil((requiredBitrateKbps(muteSound) * 1000 * duration) / 8 / encodingEfficiency(hasMotion));
+	Math.ceil(
+		(requiredBitrateKbps(muteSound) * 1000 * duration) / 8 / encodingEfficiency('ffmpeg', hasMotion)
+	);
 
 const splitBitrate = (
 	totalKbps: number,
@@ -132,10 +144,10 @@ export const fitWithinLongestEdge = (resolution: string, maxEdge: number): strin
 export const calculateCompressionSettings = (
 	targetSize: number,
 	metadata: VideoMetadata,
-	{ preserveOriginalFps, muteSound }: EncodingOptions
+	{ preserveOriginalFps, muteSound, engine }: EncodingOptions
 ): CompressionSettings => {
 	const { videoKbps: videoBitrate, audioKbps: audioBitrate } = splitBitrate(
-		totalBitrateBudget(targetSize, metadata.duration, metadata.hasMotion),
+		totalBitrateBudget(targetSize, metadata.duration, metadata.hasMotion, engine),
 		muteSound
 	);
 	const ladder = ladderStep(videoBitrate);

@@ -64,7 +64,11 @@ export const buildCompressionArgs = (
 	const settings = calculateCompressionSettings(
 		options.targetSize,
 		{ ...metadata, duration: effectiveDuration(metadata.duration, options.trim) },
-		{ preserveOriginalFps: options.preserveOriginalFps, muteSound: options.muteSound }
+		{
+			preserveOriginalFps: options.preserveOriginalFps,
+			muteSound: options.muteSound,
+			engine: 'ffmpeg'
+		}
 	);
 
 	const args = buildInputArgs(inputPath, metadata.duration, options.trim);

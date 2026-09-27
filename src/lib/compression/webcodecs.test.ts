@@ -25,7 +25,7 @@ const video4k60: VideoMetadata = {
 describe('buildWebCodecsPlan', () => {
 	const cases = [
 		{
-			name: '4K60 to 100 MB matches the ffmpeg settings',
+			name: '4K60 to 100 MB keeps the ffmpeg resolution with a larger budget',
 			metadata: video4k60,
 			options: {
 				targetSize: 100 * MB,
@@ -37,7 +37,7 @@ describe('buildWebCodecsPlan', () => {
 				width: 1920,
 				height: 1080,
 				frameRate: 30,
-				videoBitrate: 22242000,
+				videoBitrate: 25877000,
 				audioBitrate: 128000,
 				trimStart: 0,
 				trimEnd: 30
@@ -52,7 +52,7 @@ describe('buildWebCodecsPlan', () => {
 				muteSound: false,
 				trim: { enabled: true, skipFirstSeconds: 30, skipLastSeconds: 30 }
 			},
-			expected: { trimStart: 30, trimEnd: 90, videoBitrate: 788000 }
+			expected: { trimStart: 30, trimEnd: 90, videoBitrate: 915000 }
 		},
 		{
 			name: 'invalid trim keeps the whole video',
@@ -69,7 +69,7 @@ describe('buildWebCodecsPlan', () => {
 			name: 'muted output gives the audio share to video',
 			metadata: { ...video4k60, duration: 120, resolution: '1920x1080', fps: 30 },
 			options: { targetSize: 8 * MB, preserveOriginalFps: false, muteSound: true, trim: NO_TRIM },
-			expected: { videoBitrate: 447000, audioBitrate: 0 }
+			expected: { videoBitrate: 520000, audioBitrate: 0 }
 		},
 		{
 			name: 'portrait video keeps its orientation',

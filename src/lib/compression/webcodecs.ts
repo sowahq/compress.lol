@@ -82,7 +82,11 @@ export const buildWebCodecsPlan = (
 	const settings = calculateCompressionSettings(
 		options.targetSize,
 		{ ...metadata, duration },
-		{ preserveOriginalFps: options.preserveOriginalFps, muteSound: options.muteSound }
+		{
+			preserveOriginalFps: options.preserveOriginalFps,
+			muteSound: options.muteSound,
+			engine: 'webcodecs'
+		}
 	);
 	const [width, height] = settings.resolution.split('x').map(Number);
 	const trimStart = duration < metadata.duration ? options.trim.skipFirstSeconds : 0;

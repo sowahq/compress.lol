@@ -35,17 +35,17 @@ Time from clicking "Compress Video" to the download being ready, measured on an 
 
 | Clip                         | Original | Target          | Output  | Reduction | Time   |
 | ---------------------------- | -------- | --------------- | ------- | --------- | ------ |
-| 4K 30 fps, 24 s              | 148.5 MB | 25 MB           | 19.7 MB | 86.7%     | 2.8 s  |
-| 4K 30 fps, 24 s              | 148.5 MB | Discord (20 MB) | 15.6 MB | 89.5%     | 2.8 s  |
-| Phone, portrait 60 fps, 44 s | 125.6 MB | 25 MB           | 19.9 MB | 84.1%     | 4.3 s  |
-| Phone, portrait 60 fps, 44 s | 125.6 MB | Discord (20 MB) | 15.9 MB | 87.3%     | 4.3 s  |
-| 1080p film, 60 s             | 52.6 MB  | 25 MB           | 20.1 MB | 61.8%     | 4.3 s  |
-| 1080p film, 60 s             | 52.6 MB  | Discord (20 MB) | 16.1 MB | 69.4%     | 4.3 s  |
-| 1080p film, 2 min 30 s       | 170.2 MB | 25 MB           | 20.1 MB | 88.2%     | 10.4 s |
-| 1080p film, 2 min 30 s       | 170.2 MB | Discord (20 MB) | 15.9 MB | 90.6%     | 10.9 s |
-| 1080p film, 2 min 30 s       | 170.2 MB | 8 MB            | 6.2 MB  | 96.4%     | 24.4 s |
+| 4K 30 fps, 24 s              | 148.5 MB | 25 MB           | 22.9 MB | 84.6%     | 2.8 s  |
+| 4K 30 fps, 24 s              | 148.5 MB | Discord (20 MB) | 18.2 MB | 87.7%     | 2.8 s  |
+| Phone, portrait 60 fps, 44 s | 125.6 MB | 25 MB           | 23.3 MB | 81.5%     | 4.3 s  |
+| Phone, portrait 60 fps, 44 s | 125.6 MB | Discord (20 MB) | 18.7 MB | 85.1%     | 4.3 s  |
+| 1080p film, 60 s             | 52.6 MB  | 25 MB           | 23.3 MB | 55.6%     | 4.3 s  |
+| 1080p film, 60 s             | 52.6 MB  | Discord (20 MB) | 18.7 MB | 64.5%     | 4.3 s  |
+| 1080p film, 2 min 30 s       | 170.2 MB | 25 MB           | 23.3 MB | 86.3%     | 10.6 s |
+| 1080p film, 2 min 30 s       | 170.2 MB | Discord (20 MB) | 18.7 MB | 89.0%     | 10.6 s |
+| 1080p film, 2 min 30 s       | 170.2 MB | 8 MB            | 7.5 MB  | 95.6%     | 10.9 s |
 
-Every run used WebCodecs except the last one, which fell back to ffmpeg.wasm. Resolution and frame rate are lowered when the target requires it: the 4K clip comes out at 1440x810, the portrait clip at 810x1440 and 30 fps.
+Every run used WebCodecs and met the target on the first attempt. Resolution and frame rate drop when the target requires it: the 4K clip comes out at 1440x810, the portrait clip at 810x1440 and 30 fps.
 
 Clips: [Volcano eruption of Litli-Hrútur](https://commons.wikimedia.org/wiki/File:007_Volcano_eruption_of_Litli-Hr%C3%BAtur_in_Iceland_in_2023_Video_by_Giles_Laurent.webm) by Giles Laurent (CC BY-SA 4.0), [VTA light rail arriving at Hamilton station](https://commons.wikimedia.org/wiki/File:VTA_light_rail_arriving_at_Hamilton_station.webm) by Grendelkhan (CC BY-SA 4.0), [Tears of Steel](https://mango.blender.org) and [Sintel](https://durian.blender.org) by the Blender Foundation (CC BY 3.0), re-encoded to H.264 at camera-like bitrates before the test.
 
@@ -84,7 +84,7 @@ The flow lives in `src/lib/compression/`, starting with `compressor.ts`. All siz
 
 ### Browser support
 
-- **WebCodecs (fast path)**: Chrome and Edge 94+, Safari 16.4+, Firefox 130+. Browsers without a native AAC encoder (Firefox) use a WebAssembly AAC encoder.
+- **WebCodecs (fast path)**: Chrome and Edge 94+, Safari 16.4+, Firefox 130+. Audio is always encoded with a WebAssembly AAC encoder, because native AAC encoders ignore or reject low bitrates.
 - **Fallback**: any browser with WebAssembly and `SharedArrayBuffer`. The app sends the cross-origin isolation headers this requires.
 
 ### Privacy

@@ -1,0 +1,6 @@
+services:
+  compress:
+    image: ghcr.io/sowahq/compress.lol:latest
+    ports:
+      - '3000:3000'
+    restart: unless-stopped

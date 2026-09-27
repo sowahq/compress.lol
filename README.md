@@ -5,68 +5,95 @@
   </picture>
 </h1>
 
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![GitHub issues](https://img.shields.io/github/issues/sowahq/compress.lol)](https://github.com/sowahq/compress.lol/issues)
-[![SvelteKit](https://img.shields.io/badge/SvelteKit-FF3E00?style=flat&logo=svelte&logoColor=white)](https://svelte.dev/docs/kit)
-[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+<p align="center">
+  Shrink any video to fit Discord, WhatsApp or email, 100% in your browser with WebCodecs and WebAssembly. Nothing is uploaded.
+</p>
 
-> _"Crushing file sizes, not dreams"_
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache_2.0-blue.svg" alt="License: Apache 2.0"></a>
+  <a href="https://github.com/sowahq/compress.lol/stargazers"><img src="https://img.shields.io/github/stars/sowahq/compress.lol?style=flat" alt="GitHub stars"></a>
+  <a href="https://compress.lol"><img src="https://img.shields.io/badge/demo-compress.lol-ff3333" alt="Live demo: compress.lol"></a>
+</p>
 
-Compress a video to a target size (Discord, WhatsApp, email or any size you choose) directly in your browser at [compress.lol](https://compress.lol). The video never leaves your device.
-
----
+<p align="center">
+  <img src=".github/assets/demo.gif" alt="A video is dropped on compress.lol and compressed to 25 MB in the browser" width="800">
+</p>
 
 ## Features
 
-- **Fits the target**: the output is measured and re-encoded when needed, up to three attempts, so it lands under the size you picked.
-- **Platform presets**: Discord, Discord Nitro, WhatsApp, Gmail / Outlook, generic sizes or a custom size.
-- **Hardware encoding**: WebCodecs encodes on the GPU when the browser supports it, with an automatic fallback to ffmpeg.wasm for older formats (AVI, MPEG-4 Part 2...) and browsers.
-- **Options**: trim the start or the end, mute the sound, keep the original frame rate, or process the audio only without re-encoding the video.
-- **Private**: files are read and encoded locally; nothing is uploaded.
+- **Private by design**: the video is read and encoded on your device. No server upload, no account.
+- **Fast**: WebCodecs uses the hardware encoder of your GPU. ffmpeg.wasm takes over for formats and browsers WebCodecs cannot handle (AVI, MPEG-4 Part 2...).
+- **Hits the target**: the output is measured and re-encoded with a corrected budget when it is too large, so it lands under the size you picked.
+- **Platform presets**: Discord, Discord Nitro, WhatsApp, Gmail / Outlook, generic sizes, or any custom size from 1 to 2048 MB.
+- **Large files**: videos up to 5 GB, in MP4, MOV, MKV, WebM, AVI and more.
+- **Options**: drag and drop, trim the start or the end, mute the sound, keep the original frame rate, or keep the audio only.
 - **Five languages**: English, French, Polish, Korean and Arabic (right to left), with light, dark and Catppuccin themes.
 
----
+## Benchmark
+
+Time from clicking "Compress Video" to the download being ready, measured on an Apple M4 MacBook with Chrome 153 (macOS 27), production build, median of two runs.
+
+| Clip                         | Original | Target          | Output  | Reduction | Time   |
+| ---------------------------- | -------- | --------------- | ------- | --------- | ------ |
+| 4K 30 fps, 24 s              | 148.5 MB | 25 MB           | 19.7 MB | 86.7%     | 2.8 s  |
+| 4K 30 fps, 24 s              | 148.5 MB | Discord (20 MB) | 15.6 MB | 89.5%     | 2.8 s  |
+| Phone, portrait 60 fps, 44 s | 125.6 MB | 25 MB           | 19.9 MB | 84.1%     | 4.3 s  |
+| Phone, portrait 60 fps, 44 s | 125.6 MB | Discord (20 MB) | 15.9 MB | 87.3%     | 4.3 s  |
+| 1080p film, 60 s             | 52.6 MB  | 25 MB           | 20.1 MB | 61.8%     | 4.3 s  |
+| 1080p film, 60 s             | 52.6 MB  | Discord (20 MB) | 16.1 MB | 69.4%     | 4.3 s  |
+| 1080p film, 2 min 30 s       | 170.2 MB | 25 MB           | 20.1 MB | 88.2%     | 10.4 s |
+| 1080p film, 2 min 30 s       | 170.2 MB | Discord (20 MB) | 15.9 MB | 90.6%     | 10.9 s |
+| 1080p film, 2 min 30 s       | 170.2 MB | 8 MB            | 6.2 MB  | 96.4%     | 24.4 s |
+
+Every run used WebCodecs except the last one, which fell back to ffmpeg.wasm. Resolution and frame rate are lowered when the target requires it: the 4K clip comes out at 1440x810, the portrait clip at 810x1440 and 30 fps.
+
+Clips: [Volcano eruption of Litli-Hrútur](https://commons.wikimedia.org/wiki/File:007_Volcano_eruption_of_Litli-Hr%C3%BAtur_in_Iceland_in_2023_Video_by_Giles_Laurent.webm) by Giles Laurent (CC BY-SA 4.0), [VTA light rail arriving at Hamilton station](https://commons.wikimedia.org/wiki/File:VTA_light_rail_arriving_at_Hamilton_station.webm) by Grendelkhan (CC BY-SA 4.0), [Tears of Steel](https://mango.blender.org) and [Sintel](https://durian.blender.org) by the Blender Foundation (CC BY 3.0), re-encoded to H.264 at camera-like bitrates before the test.
+
+## Self-Hosting
+
+The image runs on amd64 and arm64 and listens on port 3000.
+
+```bash
+docker run -d --name compress -p 3000:3000 --restart unless-stopped ghcr.io/sowahq/compress.lol:latest
+```
+
+Or with Docker Compose (`compose.yaml`):
+
+```yaml
+services:
+  compress:
+    image: ghcr.io/sowahq/compress.lol:latest
+    ports:
+      - '3000:3000'
+    restart: unless-stopped
+```
+
+- **Serve it over HTTPS** (or open it on `localhost`). Browsers only enable WebCodecs and `SharedArrayBuffer` in a secure context, so a plain `http://` LAN address will not compress anything. Any reverse proxy with a certificate works (Caddy, Traefik, nginx).
+- **No analytics**: a self-hosted instance loads no tracking script and sends nothing anywhere.
+- **Environment variables**: `PORT` (default `3000`) and `HOST` (default `0.0.0.0`).
+- **Build it yourself**: `docker build -t compress.lol .` from a clone of this repository.
 
 ## How it works
 
 1. **Analysis**: [Mediabunny](https://mediabunny.dev) reads the file (duration, resolution, frame rate, codec, rotation). Files it cannot read are probed with ffmpeg.wasm.
 2. **Settings**: resolution, frame rate and bitrates are derived from the target size, the duration and how much motion the video has. Targets too small for the duration are refused before encoding.
 3. **Encoding**: WebCodecs encodes H.264 and AAC into an MP4. If WebCodecs cannot handle the file, fails or stalls, the same attempt runs with ffmpeg.wasm, loaded on demand from jsDelivr (unpkg as fallback) and checked against pinned SHA-256 hashes.
-4. **Fit check**: an output over the target is re-encoded with a corrected budget.
+4. **Fit check**: an output over the target is re-encoded with a corrected budget, up to three attempts.
 
-The flow lives in `src/lib/compression/`, starting with `compressor.ts`.
+The flow lives in `src/lib/compression/`, starting with `compressor.ts`. All sizes are decimal megabytes (1 MB = 1,000,000 bytes), the unit platforms use. Presets live in `src/lib/compression/presets.json`, each with its official source and the date it was checked.
 
-### Compression targets
-
-All sizes are decimal megabytes (1 MB = 1,000,000 bytes), the unit platforms use. Platform presets:
-
-- **Discord**: 20 MB; **Discord Nitro Basic**: 50 MB; **Discord Nitro**: 500 MB
-- **WhatsApp**: 16 MB (largest video sent as media)
-- **Gmail / Outlook**: 18 MB (25 MB limit minus attachment encoding overhead)
-
-Generic sizes: **8 MB**, **25 MB** (default), **50 MB**, **100 MB**, or a **custom size** from 1 to 2048 MB. Presets live in `src/lib/compression/presets.json`, each with its official source and the date it was checked.
-
----
-
-## Browser support
+### Browser support
 
 - **WebCodecs (fast path)**: Chrome and Edge 94+, Safari 16.4+, Firefox 130+. Browsers without a native AAC encoder (Firefox) use a WebAssembly AAC encoder.
 - **Fallback**: any browser with WebAssembly and `SharedArrayBuffer`. The app sends the cross-origin isolation headers this requires.
-- **Maximum file size**: 5 GB.
 
----
+### Privacy
 
-## Privacy
+Videos are never uploaded: analysis and encoding run in your browser. compress.lol counts anonymous usage events with [Umami](https://umami.is) (no cookies): for example the resolution tier, size and duration ranges, file extension, chosen target, engine used and whether the target was met. File names and contents are never sent.
 
-Videos are never uploaded: analysis and encoding run in your browser.
+## Contributing
 
-The site counts anonymous usage events with [Umami](https://umami.is) (no cookies): for example the resolution tier, size and duration ranges, file extension, chosen target, engine used and whether the target was met. File names and contents are never sent.
-
----
-
-## Development
-
-Requirements: Node.js 20.9 or later and npm.
+Contributions are welcome: bug reports, new platform presets, translations and code. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the checks to run and the pull request conventions, and [Translations](CONTRIBUTING.md#translations) to add a language. This project follows a [code of conduct](CODE_OF_CONDUCT.md).
 
 ```bash
 npm ci             # install dependencies
@@ -77,27 +104,11 @@ npm run lint       # formatting check (npm run format to fix)
 npm run build      # production build
 ```
 
-The `/lab` page, available in development only, compresses the same file with every engine and compares speed, size and target accuracy.
-
-The site runs on Cloudflare Workers. Every merge to `main` is built and deployed by Cloudflare Workers Builds. `npm run preview:cloudflare` runs the production build locally with Wrangler.
-
-### Adding languages
-
-See [Translations in CONTRIBUTING.md](CONTRIBUTING.md#translations). `npm test` checks that every language has all the texts.
-
----
-
-## Contributing
-
-Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the checks to run and the pull request conventions. This project follows a [code of conduct](CODE_OF_CONDUCT.md).
-
----
+Requirements: Node.js 20.9 or later and npm. The `/lab` page, available in development only, compresses the same file with every engine and compares speed, size and target accuracy. compress.lol runs on Cloudflare Workers, and every merge to `main` is deployed by Cloudflare Workers Builds.
 
 ## License
 
-Apache 2.0, see [LICENSE](LICENSE).
-
----
+compress.lol is open source under the [Apache License 2.0](LICENSE).
 
 ## Acknowledgements
 
@@ -112,9 +123,3 @@ Apache 2.0, see [LICENSE](LICENSE).
 - [Cloudflare Workers](https://workers.cloudflare.com): hosting
 - [jsDelivr](https://www.jsdelivr.com) and [unpkg](https://unpkg.com): delivery of the ffmpeg.wasm core
 - [Contributor Covenant](https://www.contributor-covenant.org): code of conduct
-
----
-
-<div align="center">
-    <em>"Making video compression accessible to everyone, one byte at a time"</em>
-</div>

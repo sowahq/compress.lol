@@ -4,6 +4,7 @@ import { paraglideMiddleware } from '$lib/paraglide/server';
 import { env } from '$env/dynamic/public';
 import { textDirection } from '$lib/i18n';
 import { umamiRouteBlocked } from '$lib/server/umami';
+import { crossOriginIsolationHeaders } from '../isolation-headers.js';
 
 const handleParaglide: Handle = ({ event, resolve }) =>
 	paraglideMiddleware(event.request, ({ request, locale }) => {
@@ -18,9 +19,9 @@ const handleParaglide: Handle = ({ event, resolve }) =>
 const handleFFmpeg: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
 
-	response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-	response.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
-	response.headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+	for (const [name, value] of Object.entries(crossOriginIsolationHeaders)) {
+		response.headers.set(name, value);
+	}
 
 	return response;
 };

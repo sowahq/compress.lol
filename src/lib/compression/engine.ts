@@ -2,6 +2,11 @@ import { WebCodecsUnsupportedError } from './webcodecs-support';
 
 export type Engine = 'webcodecs' | 'ffmpeg';
 
+export const ENGINE_NAMES: Record<Engine, string> = {
+	webcodecs: 'WebCodecs',
+	ffmpeg: 'ffmpeg.wasm'
+};
+
 export type EngineRunner = (sizeBudget: number) => Promise<Uint8Array>;
 
 export interface FallbackEncoderOptions {

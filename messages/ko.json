@@ -24,6 +24,7 @@
 	"compress_video": "동영상 압축",
 	"compressing": "압축 중...",
 	"progress": "진행률",
+	"encoding_with": "{engine}(으)로 인코딩 중",
 	"results": "결과",
 	"results_description": "압축 결과 및 다운로드",
 	"original_size": "원본 크기",

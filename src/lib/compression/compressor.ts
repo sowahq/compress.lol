@@ -114,7 +114,6 @@ export interface EncodeStart {
 }
 
 export interface CompressorEvents {
-	onStatus?: (message: string) => void;
 	onProgress?: (percent: number) => void;
 	onEncodeStart?: (start: EncodeStart) => void;
 	onFFmpegLoading?: (loading: boolean) => void;
@@ -170,11 +169,9 @@ export const createCompressor = (
 
 	const createFFmpeg = async (): Promise<FFmpegInstance> => {
 		events.onFFmpegLoading?.(true);
-		events.onStatus?.('Loading ffmpeg-core.js');
 		try {
 			const instance = dependencies.createFFmpeg();
 			instance.on('log', ({ message }: LogEvent) => {
-				events.onStatus?.(message);
 				if (message.includes('Last message repeated') || message.includes('Past duration')) {
 					console.warn('Possible hang detected:', message);
 				}
@@ -261,10 +258,8 @@ export const createCompressor = (
 			buildArgs: (inputPath: string) => string[]
 		): Promise<Uint8Array> => {
 			const instance = await ensureFFmpeg();
-			events.onStatus?.('Mounting input file...');
 			return withMountedFile(instance, file, '/input', (inputPath) => {
 				const args = buildArgs(inputPath);
-				events.onStatus?.(audioOnly ? 'Processing audio only...' : 'Starting compression...');
 				console.log('FFmpeg args:', args);
 				return runFFmpeg(instance, args);
 			});
@@ -274,7 +269,6 @@ export const createCompressor = (
 			if (!analysis.readableByWebCodecs) {
 				throw new WebCodecsUnsupportedError(['unreadable_container']);
 			}
-			events.onStatus?.('Starting compression...');
 			const { encodeWithWebCodecs } = await dependencies.loadWebCodecs();
 			return encodeWithWebCodecs(
 				file,
@@ -344,11 +338,6 @@ export const createCompressor = (
 							return selected.encode(sizeBudget);
 						}
 					});
-			events.onStatus?.(
-				audioOnly
-					? 'Audio processing completed successfully!'
-					: 'Compression completed successfully!'
-			);
 			return {
 				data,
 				attempts,
@@ -357,7 +346,6 @@ export const createCompressor = (
 				fallbackReason: fallbackReason()
 			};
 		} catch (error) {
-			events.onStatus?.('Compression failed');
 			if (engine() === 'ffmpeg') {
 				await resetFFmpeg();
 			}

@@ -120,7 +120,6 @@ const createHarness = ({
 		threadCount: () => 1
 	};
 	const events = {
-		onStatus: vi.fn(),
 		onProgress: vi.fn(),
 		onEncodeStart: vi.fn(),
 		onFFmpegLoading: vi.fn(),

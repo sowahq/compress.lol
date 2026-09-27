@@ -25,7 +25,7 @@
 	} from '$lib/components/compression/results-card.svelte';
 	import type { TrimOptions } from '$lib/compression/args';
 	import { isChromiumBrowser } from '$lib/browser';
-	import type { Engine } from '$lib/compression/engine';
+	import { ENGINE_NAMES, type Engine } from '$lib/compression/engine';
 	import { MAX_ENCODE_ATTEMPTS } from '$lib/compression/target';
 	import {
 		CompressionJobError,
@@ -65,7 +65,6 @@
 	let dragDepth = $state(0);
 	let result = $state<CompressionResult | null>(null);
 	let errorMessage = $state('');
-	let message = $state('Initializing...');
 	let startTime = $state<number>(0);
 	let estimatedTimeRemaining = $state<number>(0);
 	let muteSound = $state(false);
@@ -102,7 +101,6 @@
 	};
 
 	const compressor = createCompressor({
-		onStatus: (text) => (message = text),
 		onProgress: (percent) => {
 			progress = percent;
 			estimatedTimeRemaining =
@@ -520,7 +518,11 @@
 							</div>
 						</div>
 						<Progress value={progress} class="w-full" />
-						<p class="text-center text-xs text-muted-foreground">{message}</p>
+						{#if activeEngine}
+							<p class="text-center text-xs text-muted-foreground">
+								{m.encoding_with({ engine: ENGINE_NAMES[activeEngine] })}
+							</p>
+						{/if}
 					</div>
 				{/if}
 			</Card.Content>

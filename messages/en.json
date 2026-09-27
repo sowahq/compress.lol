@@ -24,6 +24,7 @@
 	"compress_video": "Compress Video",
 	"compressing": "Compressing...",
 	"progress": "Progress",
+	"encoding_with": "Encoding with {engine}",
 	"results": "Results",
 	"results_description": "Compression results and download",
 	"original_size": "Original Size",

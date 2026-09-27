@@ -24,6 +24,7 @@
 	"compress_video": "ضغط الفيديو",
 	"compressing": "جار الضغط...",
 	"progress": "التقدم",
+	"encoding_with": "جارٍ الترميز باستخدام {engine}",
 	"results": "النتائج",
 	"results_description": "نتائج الضغط والتنزيل",
 	"original_size": "الحجم الأصلي",
